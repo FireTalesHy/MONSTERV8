@@ -10,7 +10,7 @@ Jeu de parcours arcade en **2.5D** dans un univers **Miami vaporwave**, jouable 
 |---|---|---|---|
 | 1 · Ocean Drive | **Moto** sportive | plage, palmiers, soleil rétro | légère et nerveuse, wheelies faciles, attention à la tête |
 | 2 · Neon Junkyard | **Monster truck** (coupé V8) | casse néon | écrase tout, vole haut |
-| 3 · Midnight Touge | **Honda Civic Type R « tuning »** | nuit, skyline néon, néons sous la caisse | rapide et précise, son VTEC |
+| 3 · Midnight Touge | **Honda Civic Type R** hatchback bas, tuning vert + LED | nuit, skyline néon | rapide et précise, aileron, néons verts, son VTEC |
 | 4 · Chrome Highway | **Camion** (tracteur + remorque) | désert au crépuscule | lourd, lent à lancer, difficile à retourner |
 
 Chaque monde compte **5 parcours courts** (15 à 40 s) façon parkour : sauts au-dessus du vide, plateaux en descente, escaliers, falaises, rangées de véhicules à survoler, **pads de boost** et pièces à collecter. Chaque parcours se débloque en terminant le précédent ; 3 étoiles par parcours.
@@ -29,7 +29,7 @@ Toit au sol, réception ratée, véhicule retourné, chute dans le vide / l'eau 
 | Recommencer | `R` | |
 | Pause / Son | `P` ou `Échap` / `M` | ⏸ / 🔊 |
 
-Boutons tactiles proportionnels à l'écran, multi-touch, plein écran ⛶, portrait ou paysage, installable sur l'écran d'accueil (iPad : *Partager → Sur l'écran d'accueil*).
+Chaque véhicule a sa peinture d'origine (la Civic est verte) ; 6 autres peintures au choix. Boutons tactiles proportionnels à l'écran, multi-touch, plein écran ⛶, portrait ou paysage, installable sur l'écran d'accueil (iPad : *Partager → Sur l'écran d'accueil*).
 
 ## Technique
 

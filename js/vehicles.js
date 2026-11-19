@@ -18,28 +18,28 @@
     moto: {
       key: 'moto', name: 'MOTO', WR: 24, WB: 56, R: 50, K: 85, C: 9, KH: 500, INV_I: 1 / 1050,
       P: 1000, BRAKE: 1300, VMAX: 2100, RMAX: 600, MU: 2.8, BOOST: 1700, DQ: 0.00024, WHEELIE: 2.4, AIR_ROT: 13, WMAX: 10,
-      zoom: 1.35, engine: 'bike', glow: '#00e5ff',
+      zoom: 1.35, engine: 'bike', glow: '#00e5ff', paint: { a: '#ff4fae', b: '#a3125f' },
       pts: [[48, -52], [30, -46], [-72, -42], [6, -92], [-24, -72], [68, -34]], roof: { 3: 1, 4: 1 },
       exhaust: [-80, -26], far: false
     },
     monster: {
       key: 'monster', name: 'MONSTER TRUCK', WR: 38, WB: 68, R: 78, K: 46, C: 10, KH: 420, INV_I: 1 / 2800,
       P: 820, BRAKE: 1100, VMAX: 1800, RMAX: 520, MU: 2.6, BOOST: 1500, DQ: 0.00026, WHEELIE: 1.0, AIR_ROT: 9.5, WMAX: 8.5,
-      zoom: 1.0, engine: 'v8', glow: '#ff2e97',
+      zoom: 1.0, engine: 'v8', glow: '#ff2e97', paint: { a: '#ffb02e', b: '#c2410c' },
       pts: [[112, -18], [112, -34], [34, -68], [-40, -68], [-110, -34], [-108, -14], [66, -50], [-70, -46]], roof: { 2: 1, 3: 1 },
       exhaust: [-114, -12], far: true
     },
     civic: {
-      key: 'civic', name: 'CIVIC TYPE R', WR: 27, WB: 74, R: 58, K: 78, C: 13, KH: 520, INV_I: 1 / 2300,
+      key: 'civic', name: 'CIVIC TYPE R', WR: 24, WB: 70, R: 54, K: 78, C: 13, KH: 520, INV_I: 1 / 2300,
       P: 900, BRAKE: 1500, VMAX: 1950, RMAX: 520, MU: 3.2, BOOST: 1550, DQ: 0.00023, WHEELIE: 0.5, AIR_ROT: 8.5, WMAX: 8,
-      zoom: 1.12, engine: 'vtec', glow: '#00e5ff',
-      pts: [[94, -16], [92, -32], [14, -60], [-34, -60], [-92, -34], [-94, -14], [58, -40], [-74, -46]], roof: { 2: 1, 3: 1 },
-      exhaust: [-98, -14], far: true
+      zoom: 1.12, engine: 'vtec', glow: '#39ff14', paint: { a: '#3dff7e', b: '#087a35' },
+      pts: [[95, 14], [88, 0], [18, -26], [-58, -28], [-90, -6], [-92, 14], [56, -8], [-76, -22]], roof: { 2: 1, 3: 1 },
+      exhaust: [-98, 26], far: true
     },
     truck: {
       key: 'truck', name: 'CAMION', WR: 34, WB: 128, R: 84, K: 58, C: 12, KH: 480, INV_I: 1 / 9500,
       P: 760, BRAKE: 950, VMAX: 1550, RMAX: 440, MU: 2.8, BOOST: 1250, DQ: 0.00029, WHEELIE: 0.15, AIR_ROT: 3.6, WMAX: 4.5,
-      zoom: 0.78, engine: 'diesel', glow: '#ffe14d',
+      zoom: 0.78, engine: 'diesel', glow: '#ffe14d', paint: { a: '#ff4fae', b: '#7a1fd1' },
       pts: [[172, -26], [150, -78], [112, -104], [40, -112], [-150, -112], [-176, -60], [-176, -24]], roof: { 2: 1, 3: 1, 4: 1 },
       exhaust: [70, -112], far: true
     }
@@ -131,59 +131,93 @@
     }
   }
 
-  // ------------------------------------------------------------------ HONDA CIVIC TYPE R « tuning »
+  // ------------------------------------------------------------------ HONDA CIVIC TYPE R : hatchback bas, tuning vert + LED
+  function ledLine(gx, x1, y1, x2, y2, col, w) {
+    gx.lineCap = 'round';
+    gx.strokeStyle = col; gx.globalAlpha = 0.22; gx.lineWidth = w * 4; gx.beginPath(); gx.moveTo(x1, y1); gx.lineTo(x2, y2); gx.stroke();
+    gx.globalAlpha = 0.5; gx.lineWidth = w * 2; gx.beginPath(); gx.moveTo(x1, y1); gx.lineTo(x2, y2); gx.stroke();
+    gx.globalAlpha = 1; gx.strokeStyle = '#fff'; gx.lineWidth = Math.max(1, w * 0.6); gx.beginPath(); gx.moveTo(x1, y1); gx.lineTo(x2, y2); gx.stroke();
+    gx.strokeStyle = col; gx.lineWidth = w; gx.globalAlpha = 0.55; gx.beginPath(); gx.moveTo(x1, y1); gx.lineTo(x2, y2); gx.stroke();
+    gx.globalAlpha = 1; gx.lineCap = 'butt';
+  }
   function drawCivic(gx, car, col, boosting, t) {
-    var V = VEH.civic, WB = V.WB, WR = V.WR, i;
-    // néons sous la caisse
-    var ug = gx.createRadialGradient(0, 4, 4, 0, 4, 120);
-    ug.addColorStop(0, 'rgba(0,229,255,0.85)'); ug.addColorStop(0.5, 'rgba(255,46,151,0.35)'); ug.addColorStop(1, 'rgba(255,46,151,0)');
-    gx.fillStyle = ug; gx.beginPath(); gx.ellipse(0, 4, 118, 26, 0, 0, TAU); gx.fill();
-    for (i = 0; i < 2; i++) farWheel(gx, (i ? WB : -WB) - 10, car.wheels[i].dist - WR - 12, WR, car.wheels[i].spin);
+    var V = VEH.civic, WB = V.WB, WR = V.WR, SH = 40, i, LIME = '#39ff14';
+    // néons verts sous la caisse
+    var ug = gx.createRadialGradient(0, 44, 4, 0, 44, 135);
+    ug.addColorStop(0, 'rgba(57,255,20,0.95)'); ug.addColorStop(0.5, 'rgba(0,229,255,0.4)'); ug.addColorStop(1, 'rgba(0,229,255,0)');
+    gx.fillStyle = ug; gx.beginPath(); gx.ellipse(0, 44, 130, 24, 0, 0, TAU); gx.fill();
+    for (i = 0; i < 2; i++) farWheel(gx, (i ? WB : -WB) - 9, car.wheels[i].dist - WR - 11, WR, car.wheels[i].spin);
     for (i = 0; i < 2; i++) {
       var lx = i ? WB : -WB, wy = car.wheels[i].dist - WR;
-      gx.strokeStyle = '#d4a017'; gx.lineWidth = 5; gx.beginPath(); gx.moveTo(lx, -10); gx.lineTo(lx, wy); gx.stroke();
-      gx.strokeStyle = '#111'; gx.lineWidth = 9; gx.globalAlpha = 0.45; gx.beginPath(); gx.moveTo(lx, -10); gx.lineTo(lx, wy); gx.stroke(); gx.globalAlpha = 1;
+      gx.strokeStyle = '#161922'; gx.lineWidth = 9; gx.beginPath(); gx.moveTo(lx, 8); gx.lineTo(lx, wy); gx.stroke();
+      gx.strokeStyle = '#d6ff3a'; gx.lineWidth = 4; gx.beginPath(); gx.moveTo(lx, 8); gx.lineTo(lx, wy); gx.stroke();
     }
-    if (boosting) { flame(gx, -98, -14, -1, 40, 5); flame(gx, -98, -9, -1, 30, 3); }
+    if (boosting) { flame(gx, -98, 22, -1, 40, 5); flame(gx, -98, 28, -1, 30, 3); }
+
+    gx.save(); gx.translate(0, SH);
     var body = new Path2D();
-    body.moveTo(-92, -7); body.lineTo(-95, -26); body.quadraticCurveTo(-94, -34, -86, -37);
-    body.lineTo(-62, -45); body.quadraticCurveTo(-46, -56, -30, -60); body.lineTo(12, -60);
-    body.quadraticCurveTo(24, -60, 32, -53); body.lineTo(54, -39); body.lineTo(84, -33);
-    body.quadraticCurveTo(95, -31, 96, -20); body.lineTo(96, -8); body.quadraticCurveTo(95, -6, 90, -6);
-    body.closePath();
+    body.moveTo(-90, -8); body.lineTo(-93, -26); body.quadraticCurveTo(-93, -34, -88, -40); body.lineTo(-80, -52);
+    body.quadraticCurveTo(-76, -57, -66, -58); body.lineTo(-6, -62); body.quadraticCurveTo(10, -62, 20, -56);
+    body.lineTo(46, -40); body.lineTo(84, -31); body.quadraticCurveTo(95, -29, 96, -18); body.lineTo(96, -8); body.closePath();
     for (var ex = 5; ex >= 1; ex--) {
       gx.save(); gx.translate(-ex * 0.9, -ex * 1.2);
-      gx.fillStyle = ex > 3 ? shade(col.b, 0.5) : shade(col.b, 0.75); gx.fill(body); gx.restore();
+      gx.fillStyle = ex > 3 ? shade(col.b, 0.45) : shade(col.b, 0.7); gx.fill(body); gx.restore();
     }
-    var bg = gx.createLinearGradient(0, -60, 0, -6);
-    bg.addColorStop(0, col.a); bg.addColorStop(0.6, col.a); bg.addColorStop(1, col.b);
+    var bg = gx.createLinearGradient(0, -62, 0, -6);
+    bg.addColorStop(0, col.a); bg.addColorStop(0.55, col.a); bg.addColorStop(1, col.b);
     gx.fillStyle = bg; gx.fill(body);
-    gx.lineWidth = 3; gx.strokeStyle = 'rgba(0,0,0,0.6)'; gx.stroke(body);
-    // bas de caisse noir + liseré rouge Type R
-    gx.fillStyle = '#14101e'; gx.fillRect(-88, -14, 180, 8);
-    gx.fillStyle = '#ff2030'; gx.fillRect(-88, -16, 180, 2.5);
-    // vitres teintées
-    gx.fillStyle = '#0d1424'; gx.beginPath(); gx.moveTo(-58, -43); gx.lineTo(-30, -57); gx.lineTo(10, -57); gx.lineTo(22, -52); gx.lineTo(44, -40); gx.closePath(); gx.fill();
-    gx.fillStyle = 'rgba(0,229,255,0.28)'; gx.beginPath(); gx.moveTo(-28, -56); gx.lineTo(-8, -56); gx.lineTo(-30, -42); gx.lineTo(-48, -42); gx.fill();
-    gx.fillStyle = shade(col.b, 0.7); gx.fillRect(-12, -57, 4, 16);
-    // aileron fixe « tuning » + aileron avant
-    gx.fillStyle = '#14101e'; gx.fillRect(-104, -56, 38, 5);
-    gx.fillStyle = '#ff2e97'; gx.fillRect(-104, -56, 38, 2);
-    gx.strokeStyle = '#14101e'; gx.lineWidth = 4; gx.beginPath(); gx.moveTo(-96, -51); gx.lineTo(-92, -36); gx.moveTo(-74, -51); gx.lineTo(-74, -42); gx.stroke();
-    gx.fillStyle = '#14101e'; gx.fillRect(80, -8, 22, 4);
-    // phare LED, feu arrière, triple sortie d'échappement
-    gx.fillStyle = '#f0fbff'; gx.beginPath(); gx.moveTo(84, -33); gx.lineTo(95, -30); gx.lineTo(94, -25); gx.lineTo(80, -28); gx.fill();
-    gx.fillStyle = '#ff2030'; gx.fillRect(-96, -32, 5, 8);
-    gx.fillStyle = '#9aa4ae';
-    gx.beginPath(); gx.arc(-97, -15, 3.2, 0, TAU); gx.arc(-97, -10, 3.2, 0, TAU); gx.arc(-97, -20, 3.2, 0, TAU); gx.fill();
-    // stickers
-    gx.fillStyle = '#ff2e97'; gx.fillRect(-60, -30, 26, 5);
-    gx.fillStyle = '#00e5ff'; gx.fillRect(-56, -24, 18, 3);
-    gx.fillStyle = '#ff2030'; gx.fillRect(2, -31, 30, 11);
-    gx.fillStyle = '#fff'; gx.font = '900 9px Orbitron, Arial Black, sans-serif'; gx.textAlign = 'center'; gx.textBaseline = 'middle'; gx.fillText('TYPE R', 17, -25);
+    // reflets
+    gx.fillStyle = 'rgba(255,255,255,0.3)'; gx.beginPath(); gx.moveTo(-70, -55); gx.lineTo(-6, -60); gx.lineTo(16, -55); gx.lineTo(-4, -56); gx.lineTo(-68, -52); gx.fill();
+    gx.fillStyle = 'rgba(255,255,255,0.18)'; gx.beginPath(); gx.moveTo(48, -40); gx.lineTo(84, -31); gx.lineTo(84, -34); gx.lineTo(50, -42); gx.fill();
+    // passages de roue
+    gx.save(); gx.clip(body);
+    for (i = 0; i < 2; i++) {
+      var ax = i ? WB : -WB, ay = car.wheels[i].dist - WR - SH;
+      gx.fillStyle = '#07040f'; gx.beginPath(); gx.arc(ax, ay, WR + 4, 0, TAU); gx.fill();
+      gx.strokeStyle = shade(col.b, 0.6); gx.lineWidth = 3; gx.beginPath(); gx.arc(ax, ay, WR + 5, Math.PI * 1.05, Math.PI * 1.95); gx.stroke();
+    }
+    gx.restore();
+    gx.lineWidth = 3; gx.strokeStyle = 'rgba(0,0,0,0.65)'; gx.stroke(body);
+    // jupes + bas de caisse noirs
+    gx.fillStyle = '#0d0a18'; gx.fillRect(-56, -14, 112, 6);
+    ledLine(gx, -52, -12, 52, -12, LIME, 2.2);
+    // vitres teintées (hatchback)
+    gx.fillStyle = '#0a1020'; gx.beginPath(); gx.moveTo(-76, -49); gx.lineTo(-67, -56); gx.lineTo(-8, -59); gx.quadraticCurveTo(8, -59, 17, -53); gx.lineTo(40, -42); gx.lineTo(-74, -42); gx.closePath(); gx.fill();
+    gx.fillStyle = 'rgba(57,255,20,0.22)'; gx.beginPath(); gx.moveTo(-40, -58); gx.lineTo(-22, -58.5); gx.lineTo(-44, -43); gx.lineTo(-60, -43); gx.fill();
+    gx.fillStyle = shade(col.b, 0.75); gx.fillRect(-24, -60, 6, 18); gx.fillRect(-79, -52, 5, 10);
+    // aileron Type R + haubans
+    gx.strokeStyle = '#0d0a18'; gx.lineWidth = 4; gx.beginPath(); gx.moveTo(-100, -58); gx.lineTo(-86, -44); gx.moveTo(-84, -62); gx.lineTo(-80, -53); gx.stroke();
+    gx.fillStyle = '#0d0a18'; gx.beginPath(); gx.moveTo(-110, -64); gx.lineTo(-70, -67); gx.lineTo(-70, -62); gx.lineTo(-110, -59); gx.closePath(); gx.fill();
+    ledLine(gx, -108, -59.5, -71, -62.5, LIME, 1.6);
+    // lame avant + diffuseur
+    gx.fillStyle = '#0d0a18'; gx.beginPath(); gx.moveTo(78, -8); gx.lineTo(102, -6); gx.lineTo(100, -3); gx.lineTo(76, -5); gx.fill();
+    ledLine(gx, 80, -4, 100, -2.5, LIME, 1.8);
+    gx.fillStyle = '#0d0a18'; gx.fillRect(-92, -9, 22, 4);
+    // phare LED + feu antibrouillard + calandre
+    gx.fillStyle = '#eaffff'; gx.beginPath(); gx.moveTo(82, -34); gx.lineTo(96, -30); gx.lineTo(95, -25); gx.lineTo(78, -29); gx.closePath(); gx.fill();
+    ledLine(gx, 78, -29.5, 95, -25.5, '#00e5ff', 1.6);
+    gx.fillStyle = '#0a0612'; gx.fillRect(88, -22, 8, 8); ledLine(gx, 88, -22, 96, -22, LIME, 1.2);
+    // feux arrière à LED (barre rouge sur le hayon)
+    ledLine(gx, -93, -33, -90, -22, '#ff2040', 2.4);
+    ledLine(gx, -91, -36, -84, -46, '#ff2040', 1.6);
+    // triple sortie d'échappement
+    gx.fillStyle = '#c9d2dc';
+    gx.beginPath(); gx.arc(-94, -10, 3.4, 0, TAU); gx.arc(-94, -16, 3.4, 0, TAU); gx.arc(-94, -22, 3.4, 0, TAU); gx.fill();
+    // stickers / vinyles
+    gx.fillStyle = '#0d0a18'; gx.beginPath(); gx.moveTo(-30, -40); gx.lineTo(-14, -40); gx.lineTo(-24, -14); gx.lineTo(-40, -14); gx.fill();
+    gx.fillStyle = LIME; gx.beginPath(); gx.moveTo(-12, -40); gx.lineTo(-8, -40); gx.lineTo(-18, -14); gx.lineTo(-22, -14); gx.fill();
+    gx.fillStyle = '#ff1f3d'; gx.fillRect(10, -34, 30, 11);
+    gx.fillStyle = '#fff'; gx.font = '900 9px Orbitron, Arial Black, sans-serif'; gx.textAlign = 'center'; gx.textBaseline = 'middle'; gx.fillText('TYPE R', 25, -28);
+    gx.fillStyle = '#00e5ff'; gx.fillRect(48, -26, 20, 3);
+    // rétroviseur
+    gx.fillStyle = col.b; gx.fillRect(30, -46, 8, 5);
+    gx.restore();
+
+    // roues basses : jantes noires, anneau LED vert, étrier rouge
     for (var w = 0; w < 2; w++) {
       gx.save(); gx.translate(w ? WB : -WB, car.wheels[w].dist - WR);
-      tire(gx, WR, car.wheels[w].spin, { tire: '#101114', side: '#1a1c22', rimR: 0.66, rim1: '#ffe9a8', rim2: '#c98f12', spoke: '#5a3d05', spokes: 10, hub: '#ff2030', neon: '#00e5ff' });
+      tire(gx, WR, car.wheels[w].spin, { tire: '#0b0c10', side: '#14161c', rimR: 0.68, rim1: '#4a505c', rim2: '#16181e', spoke: '#d8ffe0', spokes: 10, hub: '#ff1f3d', neon: LIME });
+      gx.strokeStyle = '#ff1f3d'; gx.lineWidth = 3; gx.beginPath(); gx.arc(0, 0, WR * 0.52, -0.5, 0.5); gx.stroke();
       gx.restore();
     }
   }
@@ -296,9 +330,9 @@
   }
 
   function drawVehicle(gx, car, ci, boosting, t, colors) {
-    var col = colors[ci] || colors[0];
-    gx.save(); gx.translate(car.x, car.y); gx.rotate(car.a);
     var k = car.vk;
+    var col = ci === 0 ? (VEH[k] || VEH.monster).paint : (colors[ci - 1] || colors[0]);
+    gx.save(); gx.translate(car.x, car.y); gx.rotate(car.a);
     if (k === 'moto') drawMoto(gx, car, col, boosting, t);
     else if (k === 'civic') drawCivic(gx, car, col, boosting, t);
     else if (k === 'truck') drawTruck(gx, car, col, boosting, t);

@@ -193,7 +193,9 @@
     for (var k = 0; k < BODY_PTS.length; k++) {
       var bp = BODY_PTS[k];
       var wx = car.x + bp[0] * ca - bp[1] * sa, wy = car.y + bp[0] * sa + bp[1] * ca;
-      var pen = wy - getH(wx);
+      // la carrosserie écrase les obstacles au lieu de les percuter : seul le vrai terrain la bloque
+      if (!S.finished && wy > getH(wx)) crushAt(wx);
+      var pen = wy - S.T.base(wx);
       if (pen > 0) {
         var m = normalAt(wx);
         var brx = wx - car.x, bry = wy - car.y;
@@ -212,14 +214,18 @@
         car.bodyHit = true;
         if (ROOF[k]) car.roofHit = true;
         if (bvn < -300 && -bvn > car.impact) car.impact = -bvn;
-        if (!S.finished) crushAt(wx);
       }
     }
 
     car.grounded = grounded;
     car.gspeed = grounded ? gsum / grounded : car.gspeed;
     // assistance aux bords : une seule roue au sol → on compense la bascule due à la gravité
-    if (grounded === 1) aw += (car.wheels[0].gr ? -1 : 1) * 0.8 * G * WB * INV_I * Math.cos(car.a);
+    if (grounded === 1) {
+      var dyb = S.T.base(car.x + WB) - S.T.base(car.x - WB);
+      var gs1 = Math.abs(dyb) < 1.2 * WB ? Math.atan2(dyb, 2 * WB) : 0;       // bord / falaise : on vise l'horizontale
+      var e1 = clamp(Math.atan2(Math.sin(car.a - gs1), Math.cos(car.a - gs1)), -0.9, 0.9);
+      aw += -e1 * 22 - car.w * 2.5;
+    }
 
     var rot = (inp.right ? 1 : 0) - (inp.left ? 1 : 0);
     if (grounded) {
@@ -321,7 +327,7 @@
 
   function explode(reason) {
     if (!S || S.dead || S.finished) return;
-    var car = S.car, ca = Math.cos(car.a), sa = Math.sin(car.a), col = CAR_COLORS[save.color] || CAR_COLORS[0];
+    var car = S.car, ca = Math.cos(car.a), sa = Math.sin(car.a), col = save.color === 0 ? V.paint : (CAR_COLORS[save.color - 1] || V.paint);
     S.dead = true; S.deadT = 0; S.reason = reason; S.flash = 1; S.shake = 36;
     banner('BOOM !', '#ff2e97');
     for (var w = 0; w < 2; w++) {
@@ -1110,7 +1116,8 @@
       grid.appendChild(d);
     });
     var sw = document.getElementById('swatches'); sw.innerHTML = '';
-    CAR_COLORS.forEach(function (c, i) {
+    var opts = [{ n: 'Origine', a: VEH[w.veh].paint.a, b: VEH[w.veh].paint.b }].concat(CAR_COLORS);
+    opts.forEach(function (c, i) {
       var b = document.createElement('button'); b.className = 'sw' + (i === save.color ? ' sel' : ''); b.title = c.n; b.setAttribute('aria-label', c.n);
       b.style.background = 'linear-gradient(135deg,' + c.a + ',' + c.b + ')';
       b.addEventListener('click', function () { save.color = i; persist(); buildLevels(); });
