@@ -1067,6 +1067,12 @@
   function pause() { if (state !== 'play' || S.dead) return; state = 'pause'; SND.silence(); UI.show('screen-pause'); }
   function resume() { if (state !== 'pause') return; state = 'play'; last = performance.now(); UI.show(null); }
   function toMenu(screen) { state = 'menu'; S = null; SND.silence(); UI.hud(false); if (screen === 'levels') buildLevels(); if (screen === 'worlds') buildWorlds(); UI.show('screen-' + screen); }
+  // le 1er parcours de chaque monde est libre ; les suivants s'ouvrent en terminant (ou en passant) le précédent
+  function levelUnlocked(lv) {
+    if (lv.li === 0) return true;
+    var prev = lv.id - 1;
+    return (save.stars[prev] || 0) > 0 || !!(save.skip && save.skip[prev]);
+  }
   function starStr(n) { var s = ''; for (var i = 0; i < 3; i++) s += i < n ? '★' : '☆'; return s; }
   function worldStars(w) { var n = 0; for (var i = 0; i < 5; i++) n += save.stars[w * 5 + i + 1] || 0; return n; }
 
@@ -1086,7 +1092,7 @@
   function buildWorlds() {
     var grid = document.getElementById('world-grid'); grid.innerHTML = '';
     LV.worlds.forEach(function (w, wi) {
-      var locked = wi * 5 + 1 > save.unlocked;
+      var locked = false;
       var d = document.createElement('button');
       d.className = 'world w' + (wi + 1) + (locked ? ' locked' : '');
       var st = worldStars(wi);
@@ -1106,7 +1112,7 @@
     var grid = document.getElementById('level-grid'); grid.innerHTML = '';
     document.getElementById('screen-levels').setAttribute('data-world', String(curWorld + 1));
     w.levels.forEach(function (lv) {
-      var locked = lv.id > save.unlocked;
+      var locked = !levelUnlocked(lv);
       var d = document.createElement('button');
       d.className = 'lvl' + (locked ? ' locked' : '');
       d.innerHTML = '<span class="n">' + (lv.li + 1) + '</span><span class="t">' + lv.name + '</span><span class="s">' + lv.sub + '</span>' +
@@ -1173,7 +1179,7 @@
   bind('btn-res-menu', function () { curWorld = S.def.world; toMenu('levels'); });
   bind('btn-def-retry', function () { startLevel(S.idx); });
   bind('btn-def-menu', function () { curWorld = S.def.world; toMenu('levels'); });
-  bind('btn-def-skip', function () { var id = S.def.id; if (id + 1 > save.unlocked) { save.unlocked = id + 1; persist(); } startLevel(Math.min(S.idx + 1, LV.levels.length - 1)); });
+  bind('btn-def-skip', function () { var id = S.def.id; if (!save.skip) save.skip = {}; save.skip[id] = 1; persist(); startLevel(Math.min(S.idx + 1, LV.levels.length - 1)); });
   bind('pausebtn', pause);
   bind('btn-mute', toggleMute);
   bind('btn-full', toggleFS);
@@ -1202,6 +1208,6 @@
     },
     mode: function () { return state; },
     save: function () { return save; },
-    unlockAll: function () { save.unlocked = 20; }
+    unlockAll: function () { for (var i = 1; i <= 20; i++) save.stars[i] = save.stars[i] || 1; }
   };
 })();
