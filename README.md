@@ -1,46 +1,48 @@
 # 🏁 MONSTER V8
 
-Un jeu de monster truck arcade en **2.5D**, jouable au clavier, sur tablette et sur mobile, directement dans le navigateur : un **coupé américain V8** sur de gros pneus, des voitures à écraser, des rampes géantes, des flips et du nitro.
+Jeu de parcours arcade en **2.5D** dans un univers **Miami vaporwave**, jouable au clavier, sur tablette et sur mobile, directement dans le navigateur.
 
 ▶ **Jouer :** https://firetaleshy.github.io/MONSTERV8/
 
+## 4 mondes, 4 véhicules, 20 parcours
+
+| Monde | Véhicule | Ambiance | Caractère |
+|---|---|---|---|
+| 1 · Ocean Drive | **Moto** sportive | plage, palmiers, soleil rétro | légère et nerveuse, wheelies faciles, attention à la tête |
+| 2 · Neon Junkyard | **Monster truck** (coupé V8) | casse néon | écrase tout, vole haut |
+| 3 · Midnight Touge | **Honda Civic Type R « tuning »** | nuit, skyline néon, néons sous la caisse | rapide et précise, son VTEC |
+| 4 · Chrome Highway | **Camion** (tracteur + remorque) | désert au crépuscule | lourd, lent à lancer, difficile à retourner |
+
+Chaque monde compte **5 parcours courts** (15 à 40 s) façon parkour : sauts au-dessus du vide, plateaux en descente, escaliers, falaises, rangées de véhicules à survoler, **pads de boost** et pièces à collecter. Chaque parcours se débloque en terminant le précédent ; 3 étoiles par parcours.
+
+### ☠️ Un crash fait exploser le véhicule et fait perdre le parcours
+Toit au sol, réception ratée, véhicule retourné, chute dans le vide / l'eau / la lave : **BOOM**, écran de défaite, on recommence. Après 3 échecs sur un parcours, un bouton permet de le passer.
+
 ## Commandes
 
-| Action | Clavier | Mobile |
+| Action | Clavier | Mobile / tablette |
 |---|---|---|
 | Gaz | `↑` / `W` | bouton GAZ |
 | Frein / marche arrière | `↓` / `S` | bouton ◀ |
 | Rotation en l'air (flips) | `←` `→` / `A` `D` | boutons ⟲ ⟳ |
 | Nitro | `Espace` / `Maj` | bouton NITRO |
-| Dernier checkpoint | `R` | |
+| Recommencer | `R` | |
 | Pause / Son | `P` ou `Échap` / `M` | ⏸ / 🔊 |
 
-## Tablette & mobile
-
-- Boutons tactiles proportionnels à l'écran (téléphone → iPad), **multi-touch** : gaz + inclinaison + nitro en même temps.
-- Paysage ou portrait, bouton **plein écran** ⛶, résolution adaptée automatiquement si l'appareil rame.
-- Installable comme une appli : *Partager → Sur l'écran d'accueil* (iPad) ou *Installer* (Android/Chrome), lancement en plein écran paysage.
-
-## Le jeu
-
-- 6 niveaux : Ferraille Park, Boue & Marais, Stade des Rampes, Mont Glacé, Volcan en Fusion, Arène Finale.
-- Écrase les véhicules, ramasse les pièces V8, enchaîne sauts, flips (avant/arrière) et wheelies pour faire monter le **combo** (jusqu'à x5).
-- Réceptionne sur les roues pour valider tes figures ; un atterrissage sur le toit annule le combo.
-- 3 étoiles par niveau (arrivée, puis deux paliers de score) ; les niveaux se débloquent un par un.
-- Choix de la peinture dans le menu. Progression sauvegardée dans le navigateur (`localStorage`).
-- Moteur V8 synthétisé en direct (Web Audio) : pas de fichier audio, pas d'image.
+Boutons tactiles proportionnels à l'écran, multi-touch, plein écran ⛶, portrait ou paysage, installable sur l'écran d'accueil (iPad : *Partager → Sur l'écran d'accueil*).
 
 ## Technique
 
-JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Rendu 2.5D : physique en 2D, mais piste à plusieurs voies, roues du côté éloigné, carrosserie extrudée, ombres, décor étagé en parallaxe, premier plan et vignettage. Physique maison (suspensions à ressorts, collisions sur terrain, gravité allégée) réglée pour le plaisir plutôt que pour le réalisme.
+JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Physique maison à suspensions, quatre profils de véhicule (inertie, puissance, contrôle en l'air, collision), assistances arcade (redressement en l'air, bords de falaise), sons synthétisés (Web Audio : V8, moto, VTEC, diesel, explosion). Rendu 2.5D : piste à voies, roues du côté éloigné, carrosserie extrudée, ombres, parallaxe, premier plan.
 
 ```
-index.html     page + écrans (menu, niveaux, pause, résultats)
+index.html           page + écrans (titre, mondes, niveaux, pause, victoire, défaite)
+style.css            menus Miami vaporwave
+js/vehicles.js       les 4 véhicules : paramètres physiques + dessin
+js/levels.js         4 mondes × 5 parcours générés par segments
+js/audio.js          moteurs, nitro, écrasements, explosion
+js/game.js           physique, rendu, HUD, logique de jeu, menus
 manifest.webmanifest, icon*.png   installation sur l'écran d'accueil
-style.css      interface
-js/levels.js   générateur de terrain et définition des 6 niveaux
-js/audio.js    sons (moteur V8, nitro, écrasements…)
-js/game.js     physique, rendu, HUD, logique de jeu
 ```
 
 ## Lancer en local

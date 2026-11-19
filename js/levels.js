@@ -1,41 +1,45 @@
-/* MONSTER V8 — définition des niveaux et génération du terrain */
+/* MONSTER V8 — 4 mondes × 5 parcours : terrain généré par segments, adapté à chaque véhicule */
 (function () {
   'use strict';
   var STEP = 20;
   var TAU = Math.PI * 2;
 
-  // Véhicules écrasables : largeur / hauteur (px monde)
+  // Obstacles écrasables : largeur / hauteur (px monde)
   var KINDS = {
-    car:   { w: 170, h: 48 },
-    suv:   { w: 190, h: 64 },
-    van:   { w: 200, h: 70 },
-    limo:  { w: 270, h: 48 },
-    wreck: { w: 150, h: 42 },
-    truck: { w: 230, h: 84 },
-    stack: { w: 170, h: 98 },
-    bus:   { w: 340, h: 92 }
+    cones: { w: 90, h: 30 }, barrel: { w: 70, h: 34 }, crate: { w: 84, h: 44 },
+    car: { w: 170, h: 48 }, suv: { w: 190, h: 64 }, van: { w: 200, h: 70 }, limo: { w: 270, h: 48 },
+    wreck: { w: 150, h: 42 }, truck: { w: 230, h: 84 }, stack: { w: 170, h: 98 }, bus: { w: 340, h: 92 }
   };
 
+  function rngFor(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var lerp = function (a, b, t) { return a + (b - a) * t; };
+
   function Builder() {
-    var H = [-1600, 0];            // hauteurs aux x = i * STEP (y vers le bas)
+    var H = [-1600, 0];
     var y = 0;
-    var o = { cars: [], coins: [], checks: [], pits: [], finish: 0 };
+    var o = { cars: [], coins: [], pits: [], pads: [], checks: [], finish: 0 };
     var b = {};
     function X() { return (H.length - 1) * STEP; }
     function push(v) { H.push(v); y = v; }
-    function nSamples(len) { return Math.max(1, Math.round(len / STEP)); }
+    function nS(len) { return Math.max(1, Math.round(len / STEP)); }
     var ease = function (t) { return (1 - Math.cos(Math.PI * t)) / 2; };
 
-    b.X = X;
-    b.Y = function () { return y; };
-    b.flat = function (len) { var n = nSamples(len); for (var i = 0; i < n; i++) push(y); return b; };
-    b.slope = function (len, dy) { var n = nSamples(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 + dy * i / n); return b; };
-    b.hill = function (len, dy) { var n = nSamples(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 + dy * ease(i / n)); return b; };
-    // tremplin courbe : part à plat et se redresse de plus en plus
-    b.ramp = function (len, h) { var n = nSamples(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 - h * Math.pow(i / n, 1.6)); return b; };
+    b.X = X; b.Y = function () { return y; };
+    b.flat = function (len) { var n = nS(len); for (var i = 0; i < n; i++) push(y); return b; };
+    b.slope = function (len, dy) { var n = nS(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 + dy * i / n); return b; };
+    b.hill = function (len, dy) { var n = nS(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 + dy * ease(i / n)); return b; };
+    b.ramp = function (len, h) { var n = nS(len), y0 = y; for (var i = 1; i <= n; i++) push(y0 - h * Math.pow(i / n, 1.6)); return b; };
     b.waves = function (count, len, h) {
       for (var k = 0; k < count; k++) {
-        var m = Math.max(4, nSamples(len)), y0 = y;
+        var m = Math.max(4, nS(len)), y0 = y;
         for (var i = 1; i <= m; i++) push(y0 - h * (1 - Math.cos(TAU * i / m)) / 2);
       }
       return b;
@@ -44,51 +48,45 @@
     b.pit = function (len, kind) {
       var rim = y, x0 = X(), depth = 1800;
       push(rim + depth);
-      var n = nSamples(len);
+      var n = nS(len);
       for (var i = 0; i < n; i++) push(rim + depth);
       push(rim);
       o.pits.push({ x0: x0, x1: X(), rim: rim, kind: kind || 'lava' });
       return b;
     };
+    b.pad = function (len) { var x0 = X(); b.flat(len); o.pads.push({ x0: x0, x1: X() }); return b; };
     b.crowd = function (list) {
       for (var i = 0; i < list.length; i++) {
         var sp = KINDS[list[i]];
         b.flat(14);
         var x0 = X();
         b.flat(sp.w + 14);
-        o.cars.push({
-          k: list[i], x: x0 + (sp.w + 14) / 2, w: sp.w, h: sp.h,
-          edge: Math.min(48, sp.h * 0.55 + 12), sq: 1, crushed: false, seed: o.cars.length + 1
-        });
+        o.cars.push({ k: list[i], x: x0 + (sp.w + 14) / 2, w: sp.w, h: sp.h, edge: Math.min(48, sp.h * 0.55 + 12), sq: 1, crushed: false, seed: o.cars.length + 1 });
       }
       return b;
     };
-    b.coinsLine = function (n, sp, lift) {
-      var x0 = X();
-      for (var i = 0; i < n; i++) o.coins.push({ x: x0 + i * sp, lift: lift, abs: false, got: false });
-      return b;
-    };
-    b.coinsArc = function (n, sp, lift, peak) {
-      var x0 = X();
-      for (var i = 0; i < n; i++) o.coins.push({ x: x0 + i * sp, y: y - lift - peak * Math.sin(Math.PI * i / (n - 1)), abs: true, got: false });
-      return b;
-    };
-    b.check = function () { o.checks.push({ x: X(), hit: false }); return b; };
+    b.coinsLine = function (n, sp, lift) { var x0 = X(); for (var i = 0; i < n; i++) o.coins.push({ x: x0 + i * sp, lift: lift, abs: false }); return b; };
+    b.coinsArc = function (n, sp, lift, peak) { var x0 = X(); for (var i = 0; i < n; i++) o.coins.push({ x: x0 + i * sp, y: y - lift - peak * Math.sin(Math.PI * i / (n - 1)), abs: true }); return b; };
     b.finish = function () { o.finish = X(); b.flat(900); b.step(-1600); return b; };
 
-    // --- macros -----------------------------------------------------------
-    // tremplin, fosse, réception descendante
-    b.jumpPit = function (rampLen, h, gap, kind) {
-      b.ramp(rampLen, h); b.pit(gap, kind); b.slope(Math.round(rampLen * 1.15), h); return b;
-    };
-    // tremplin, rangée de véhicules en contrebas, butte de réception
-    b.busJump = function (rampLen, h, list, hill) {
+    // --- macros de parcours -------------------------------------------------
+    b.jumpPit = function (rl, h, gap, kind) { b.ramp(rl, h); b.pit(gap, kind); b.slope(Math.round(rl * 1.15), h); return b; };
+    b.busJump = function (rl, h, list, hill) {
       hill = hill === undefined ? 0.5 : hill;
-      b.ramp(rampLen, h); b.flat(30); b.step(h);
-      b.crowd(list);
-      b.slope(150, -h * hill); b.slope(Math.round(rampLen * 0.9), h * hill);
+      b.ramp(rl, h); b.flat(30); b.step(h); b.crowd(list);
+      b.slope(150, -h * hill); b.slope(Math.round(rl * 0.9), h * hill);
       return b;
     };
+    b.hump = function (len, h) { b.hill(len, -h); b.hill(len, h); return b; };
+    b.kicker = function (rl, h) { b.ramp(rl, h); b.slope(Math.round(rl * 0.9), h); return b; };
+    b.stairs = function (n, len, h, plat) { for (var i = 0; i < n; i++) { b.hill(len, -h); b.flat(plat); } return b; };
+    b.stairsDown = function (n, len, h, plat) { for (var i = 0; i < n; i++) { b.hill(len, h); b.flat(plat); } return b; };
+    // poutre étroite entre deux gouffres
+    b.beam = function (rl, h, g1, w, g2, kind) {
+      b.ramp(rl, h); b.pit(g1, kind); b.flat(w); b.ramp(160, 36); b.pit(g2, kind); b.slope(Math.round(rl * 1.2), h + 36);
+      return b;
+    };
+    b.cliff = function (h, list) { b.flat(60); b.step(h); b.flat(200); if (list) b.crowd(list); return b; };
 
     b.done = function () {
       var arr = H.slice();
@@ -99,197 +97,162 @@
         var t = f - i;
         return arr[i] + (arr[i + 1] - arr[i]) * t;
       }
-      var coins = o.coins.map(function (c) {
-        return { x: c.x, y: c.abs ? c.y : base(c.x) - c.lift, got: false };
-      });
-      var minY = 0;
-      for (var i = 1; i < arr.length; i++) if (arr[i] < 1500 && arr[i] > minY) minY = arr[i];
-      return { H: arr, base: base, cars: o.cars, coins: coins, checks: o.checks, pits: o.pits, finish: o.finish, startX: 260, length: X(), maxY: minY };
+      var coins = o.coins.map(function (c) { return { x: c.x, y: c.abs ? c.y : base(c.x) - c.lift, got: false }; });
+      var maxY = 0;
+      for (var i = 1; i < arr.length; i++) if (arr[i] < 1500 && arr[i] > maxY) maxY = arr[i];
+      return { H: arr, base: base, cars: o.cars, coins: coins, checks: o.checks, pits: o.pits, pads: o.pads, finish: o.finish, startX: 260, length: X(), maxY: maxY };
     };
     return b;
   }
 
-  var COLORS = ['#c0392b', '#2980b9', '#27ae60', '#f1c40f', '#8e44ad', '#e67e22', '#ecf0f1', '#16a085'];
+  var COLORS = ['#ff2e97', '#00e5ff', '#ffe14d', '#8b5cf6', '#7dffd4', '#ff9a3c', '#f8fafc', '#3b82f6'];
 
-  var levels = [
-    // ---------------------------------------------------------------- 1
-    {
-      id: 1, name: 'FERRAILLE PARK', sub: 'Écrase tout ce qui bouge', theme: 'junk',
-      c: { skyTop: '#ff7a2f', skyBot: '#ffd98a', far: '#7a4a64', mid: '#563a49', ground: '#6b4a2b', deep: '#3d2918', edge: '#a6803f', hazard: '#ff6a00', hazard2: '#ffd000' },
-      par: 45, stars: [13500, 23000],
-      build: function (b) {
-        b.flat(600);
-        b.coinsLine(6, 80, 70); b.flat(520);
-        b.crowd(['car', 'car', 'car', 'car']); b.flat(350);
-        b.coinsLine(5, 80, 70); b.flat(450);
-        b.ramp(260, 90); b.slope(220, 90); b.flat(650);
-        b.check();
-        b.crowd(['suv', 'car', 'van', 'car', 'suv']); b.flat(500);
-        b.waves(5, 300, 46); b.flat(600);
-        b.coinsArc(8, 90, 60, 150); b.jumpPit(280, 100, 360); b.flat(750);
-        b.check();
-        b.crowd(['stack', 'car', 'stack', 'car']); b.flat(550);
-        b.coinsArc(10, 100, 150, 200); b.busJump(320, 150, ['car', 'car', 'suv', 'car', 'van']); b.flat(750);
-        b.check();
-        b.waves(4, 260, 60); b.flat(400);
-        b.crowd(['car', 'limo', 'car', 'bus']); b.flat(550);
-        b.coinsArc(8, 90, 90, 160); b.ramp(300, 120); b.slope(260, 120); b.flat(400);
-        b.finish();
-      }
-    },
-    // ---------------------------------------------------------------- 2
-    {
-      id: 2, name: 'BOUE & MARAIS', sub: 'Collines grasses et mares sans fond', theme: 'mud',
-      c: { skyTop: '#6f8f8a', skyBot: '#cfe0c3', far: '#59775f', mid: '#456a4e', ground: '#6a4a2a', deep: '#3a2815', edge: '#5c8a3a', hazard: '#4c7a5a', hazard2: '#9fd0a6' },
-      par: 68, stars: [9500, 16500],
-      build: function (b) {
-        b.flat(600);
-        b.hill(900, -220); b.hill(900, 220); b.flat(300);
-        b.coinsLine(6, 80, 80);
-        b.crowd(['van', 'suv', 'car', 'van']); b.flat(450);
-        b.waves(6, 280, 55); b.flat(500);
-        b.check();
-        b.coinsArc(8, 90, 60, 160); b.jumpPit(280, 105, 420, 'water'); b.flat(700);
-        b.hill(1000, -300); b.flat(200);
-        b.coinsArc(10, 90, 140, 200);
-        b.ramp(300, 140); b.slope(500, 440); b.flat(500);
-        b.check();
-        b.crowd(['stack', 'suv', 'stack', 'van', 'car']); b.flat(500);
-        b.waves(5, 240, 70); b.flat(600);
-        b.coinsArc(9, 100, 80, 180); b.jumpPit(300, 120, 520, 'water'); b.flat(700);
-        b.check();
-        b.crowd(['bus', 'car', 'bus']); b.flat(500);
-        b.hill(800, -240); b.hill(800, 240); b.flat(400);
-        b.coinsArc(10, 100, 100, 220); b.busJump(340, 170, ['suv', 'suv', 'van', 'car', 'suv', 'car']); b.flat(600);
-        b.finish();
-      }
-    },
-    // ---------------------------------------------------------------- 3
-    {
-      id: 3, name: 'STADE DES RAMPES', sub: 'Plus haut, plus loin, plus fort', theme: 'city',
-      c: { skyTop: '#2c7fd0', skyBot: '#bfe3ff', far: '#7f9bb8', mid: '#5f7a96', ground: '#7a6a58', deep: '#463c33', edge: '#d9c9a6', hazard: '#2a8fd9', hazard2: '#bfeaff' },
-      par: 68, stars: [21000, 35500],
-      build: function (b) {
+  // ---------------------------------------------------------------- profils par véhicule
+  var PROF = {
+    moto:    { kinds: ['barrel', 'crate', 'cones'], gap: [300, 620], ramp: [50, 85], rl: 230, wave: [22, 42], stepH: [40, 80], hop: 0.85, cliff: [40, 70] },
+    monster: { kinds: ['car', 'suv', 'van', 'stack', 'bus', 'truck', 'limo', 'wreck'], gap: [380, 800], ramp: [90, 150], rl: 320, wave: [46, 90], stepH: [60, 140], hop: 1.0, cliff: [60, 120] },
+    civic:   { kinds: ['car', 'cones', 'crate', 'suv'], gap: [340, 720], ramp: [70, 115], rl: 280, wave: [34, 70], stepH: [50, 100], hop: 0.95, cliff: [50, 90] },
+    truck:   { kinds: ['car', 'suv', 'van', 'limo', 'stack', 'bus'], gap: [260, 560], ramp: [80, 130], rl: 360, wave: [40, 80], stepH: [60, 120], hop: 0.9, cliff: [50, 90] }
+  };
+
+  function pick(r, arr) { return arr[Math.floor(r() * arr.length) % arr.length]; }
+
+  function genLevel(vk, li, seed, kind) {
+    var P = PROF[vk];
+    return function (b) {
+      var r = rngFor(seed), d = li / 4;
+      var budget = (7000 + li * 2200) * (vk === 'truck' ? 0.85 : 1);   // parcours courts
+      var pool = ['crowd', 'jump', 'waves', 'stairs'];
+      if (li >= 1) pool.push('chain', 'jump', 'kick');
+      if (li >= 2) pool.push('bus', 'cliff', 'chain');
+      if (li >= 3) pool.push('chain', 'bus', 'jump', 'cliff');
+      b.flat(700); b.pad(320); b.flat(260);
+      var last = '', x0 = b.X(), i = 0;
+      while (b.X() - x0 < budget) {
+        var t = (i === 0) ? 'crowd' : pick(r, pool);
+        if (t === last && r() < 0.7) t = pick(r, pool);
+        last = t;
+        var dd = clamp01(d * 0.75 + ((b.X() - x0) / budget) * 0.35 + r() * 0.12 - 0.05);
+        var gap = Math.round(lerp(P.gap[0], P.gap[1], dd) / 10) * 10;
+        var h = Math.round(lerp(P.ramp[0], P.ramp[1], dd));
+        var rl = P.rl;
+        if (t === 'crowd') {
+          var list = [], n = 2 + Math.floor(dd * 3 + r() * 2);
+          for (var k = 0; k < n; k++) list.push(pick(r, P.kinds));
+          b.coinsLine(5, 80, 70); b.crowd(list);
+        } else if (t === 'waves') {
+          b.waves(3 + Math.floor(dd * 3), Math.max(340, Math.round(rl * 1.1)), Math.round(lerp(P.wave[0], P.wave[1], dd)));
+        } else if (t === 'jump') {
+          b.pad(220); b.flat(180);
+          b.coinsArc(8, Math.round(gap / 8), 60, Math.round(h * 1.1));
+          b.jumpPit(rl, h, gap, kind);
+        } else if (t === 'kick') {
+          b.coinsArc(6, 90, 50, 120); b.kicker(rl, Math.round(h * 0.8));
+        } else if (t === 'stairs') {
+          var n2 = 2 + Math.floor(dd * 3), sh = Math.round(lerp(P.stepH[0], P.stepH[1], dd));
+          b.flat(120); b.stairs(n2, Math.round(sh * 4.5), sh, 160); b.flat(120);
+          b.stairsDown(n2, Math.round(sh * 4.5), sh, 160);
+        } else if (t === 'chain') {
+          // sauts à plat vers des plateaux plus bas, puis remontée sur sol solide
+          b.pad(200); b.flat(180);
+          var gp = Math.round((240 + 100 * dd) * P.hop / 10) * 10, D = Math.round((140 + 120 * dd) * P.hop);
+          var nn = 2 + (dd > 0.55 ? 1 : 0);
+          for (var c = 0; c < nn; c++) {
+            b.coinsArc(5, Math.round(gp / 5), 40, 80);
+            b.pit(gp, kind); b.step(D); b.flat(720);
+            b.slope(Math.round(D * 4.2), -D); b.flat(260);
+          }
+        } else if (t === 'bus') {
+          b.pad(220); b.flat(160);
+          var bl = [], bn = 3 + Math.floor(dd * 2);
+          for (var q = 0; q < bn; q++) bl.push(pick(r, P.kinds));
+          b.coinsArc(8, 100, 100, Math.round(h * 0.9));
+          b.busJump(rl, Math.round(h * 0.85), bl, 0.4);
+        } else if (t === 'cliff') {
+          b.flat(120);
+          b.coinsLine(4, 70, 80);
+          b.cliff(Math.round(lerp(P.cliff[0], P.cliff[1], dd)), [pick(r, P.kinds), pick(r, P.kinds)]);
+        }
         b.flat(650);
-        b.coinsLine(6, 80, 70);
-        b.crowd(['car', 'car', 'suv', 'car', 'car']); b.flat(500);
-        b.coinsArc(10, 100, 120, 220); b.busJump(340, 170, ['car', 'car', 'car', 'suv', 'van', 'car']); b.flat(750);
-        b.check();
-        b.waves(6, 260, 60); b.flat(500);
-        b.coinsArc(10, 100, 80, 200); b.jumpPit(320, 140, 560, 'water'); b.flat(750);
-        b.crowd(['stack', 'stack', 'stack']); b.flat(500);
-        b.check();
-        b.coinsArc(12, 100, 120, 260); b.busJump(380, 210, ['bus', 'limo', 'bus', 'truck'], 0.55); b.flat(800);
-        b.waves(4, 300, 80); b.flat(500);
-        b.check();
-        b.coinsArc(10, 100, 100, 240); b.ramp(320, 150); b.slope(240, 150); b.flat(200); b.ramp(320, 190); b.slope(300, 190); b.flat(700);
-        b.crowd(['car', 'suv', 'van', 'limo', 'suv', 'car']); b.flat(500);
-        b.coinsArc(12, 110, 140, 280); b.busJump(420, 250, ['bus', 'truck', 'bus', 'limo', 'bus'], 0.5); b.flat(700);
-        b.finish();
+        i++;
       }
-    },
-    // ---------------------------------------------------------------- 4
+      b.finish();
+    };
+  }
+  function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+
+  // ---------------------------------------------------------------- mondes
+  var WORLDS = [
     {
-      id: 4, name: 'MONT GLACÉ', sub: 'Grimpe, plane, atterris', theme: 'snow',
-      c: { skyTop: '#4a79b8', skyBot: '#e7f2ff', far: '#8aa3c4', mid: '#6d86a8', ground: '#8a95a3', deep: '#4b5563', edge: '#ffffff', hazard: '#1d4f8a', hazard2: '#9fd0ff' },
-      par: 67, stars: [12500, 21500],
-      build: function (b) {
-        b.flat(650);
-        b.coinsLine(6, 80, 70);
-        b.slope(1300, -450); b.flat(400);
-        b.coinsArc(10, 100, 100, 240);
-        b.ramp(300, 130); b.slope(260, 130); b.slope(900, 380); b.flat(700);
-        b.check();
-        b.crowd(['suv', 'car', 'van', 'car']); b.flat(500);
-        b.hill(1000, -500); b.flat(250);
-        b.coinsArc(12, 110, 100, 300);
-        b.jumpPit(330, 150, 640, 'water'); b.slope(500, 350); b.flat(700);
-        b.check();
-        b.waves(6, 260, 75); b.flat(500);
-        b.crowd(['stack', 'car', 'stack', 'suv']); b.flat(500);
-        b.hill(1100, -520); b.flat(200);
-        b.coinsArc(12, 110, 120, 320);
-        b.busJump(380, 220, ['bus', 'suv', 'van', 'bus'], 0.5); b.slope(700, 520); b.flat(700);
-        b.check();
-        b.coinsArc(10, 100, 100, 260);
-        b.jumpPit(340, 170, 760, 'water'); b.flat(600);
-        b.waves(5, 300, 85); b.flat(500);
-        b.finish();
-      }
+      id: 1, key: 'moto', veh: 'moto', name: 'OCEAN DRIVE', vehName: 'MOTO', scene: 'beach', pitKind: 'water',
+      blurb: 'Légère, nerveuse, wheelies faciles. Gare à la tête.',
+      c: { skyTop: '#2a0a5e', skyBot: '#ff9a6c', far: '#9b3fa8', mid: '#5f2a8c', ground: '#e9b88f', deep: '#a8603f', edge: '#ffd9b8', hazard: '#00c6e0', hazard2: '#9bffe6' },
+      names: [['PREMIÈRE VAGUE', 'Les bases du parcours'], ['PALMIERS', 'Sauts entre les dunes'], ['PONTON', 'Plateformes sur l\'eau'], ['NÉON NIGHT', 'Poutres et gouffres'], ['GRAND FINAL', 'Tout Ocean Drive']]
     },
-    // ---------------------------------------------------------------- 5
     {
-      id: 5, name: 'VOLCAN EN FUSION', sub: 'Ne touche pas la lave', theme: 'volcano',
-      c: { skyTop: '#2a0a12', skyBot: '#ff5a1f', far: '#4a1a1a', mid: '#2c0f10', ground: '#3b2a2a', deep: '#1a1010', edge: '#ff7a2a', hazard: '#ff5500', hazard2: '#ffd400' },
-      par: 62, stars: [19500, 33000],
-      build: function (b) {
-        b.flat(650);
-        b.coinsArc(8, 90, 60, 150); b.jumpPit(280, 110, 420, 'lava'); b.flat(650);
-        b.crowd(['wreck', 'wreck', 'car', 'wreck']); b.flat(450);
-        b.check();
-        b.waves(6, 240, 70); b.flat(500);
-        b.coinsArc(10, 100, 100, 230); b.jumpPit(320, 150, 620, 'lava'); b.flat(700);
-        b.coinsArc(10, 100, 100, 230); b.jumpPit(320, 150, 640, 'lava'); b.flat(700);
-        b.check();
-        b.crowd(['stack', 'truck', 'stack', 'truck']); b.flat(500);
-        b.hill(800, -280); b.hill(800, 280); b.flat(300);
-        b.coinsArc(12, 110, 120, 300);
-        b.jumpPit(360, 190, 820, 'lava'); b.flat(700);
-        b.check();
-        b.waves(5, 280, 90); b.flat(450);
-        b.coinsArc(12, 110, 140, 300);
-        b.busJump(400, 230, ['truck', 'bus', 'truck', 'stack', 'bus'], 0.5); b.flat(700);
-        b.check();
-        b.coinsArc(12, 120, 120, 320);
-        b.jumpPit(360, 200, 900, 'lava'); b.flat(600);
-        b.crowd(['car', 'wreck', 'suv', 'wreck']); b.flat(500);
-        b.finish();
-      }
+      id: 2, key: 'monster', veh: 'monster', name: 'NEON JUNKYARD', vehName: 'MONSTER TRUCK', scene: 'junk', pitKind: 'lava',
+      blurb: 'Coupé V8 sur gros pneus. Écrase tout, vole haut.',
+      c: { skyTop: '#12052e', skyBot: '#b3207f', far: '#43157a', mid: '#2a0d52', ground: '#3a2562', deep: '#1b0e38', edge: '#00e5ff', hazard: '#ff2e97', hazard2: '#ffe14d' },
+      names: [['FERRAILLE', 'Écrase les premières épaves'], ['ÉCRASE-TOUT', 'Piles de voitures'], ['TOUR DE GRUE', 'Sauts au-dessus du vide'], ['PILES DE BUS', 'Les gros porteurs'], ['CASSE FINALE', 'Le grand spectacle']]
     },
-    // ---------------------------------------------------------------- 6
     {
-      id: 6, name: 'ARÈNE FINALE', sub: 'Le grand spectacle', theme: 'arena',
-      c: { skyTop: '#07041a', skyBot: '#3a1d6e', far: '#241446', mid: '#150b2e', ground: '#7a5a34', deep: '#3e2c18', edge: '#d9b36a', hazard: '#7a1aff', hazard2: '#ff4df0' },
-      par: 84, stars: [24500, 42500],
-      build: function (b) {
-        b.flat(650);
-        b.coinsLine(6, 80, 70);
-        b.crowd(['car', 'suv', 'van', 'car', 'limo']); b.flat(450);
-        b.coinsArc(10, 100, 120, 240); b.busJump(360, 200, ['bus', 'car', 'suv', 'bus'], 0.5); b.flat(700);
-        b.check();
-        b.waves(7, 240, 80); b.flat(450);
-        b.coinsArc(10, 100, 100, 260); b.jumpPit(340, 170, 700, 'void'); b.flat(700);
-        b.crowd(['stack', 'stack', 'truck', 'stack', 'stack']); b.flat(500);
-        b.check();
-        b.hill(900, -320); b.coinsArc(10, 100, 120, 300);
-        b.ramp(380, 210); b.slope(300, 210); b.slope(800, 320); b.flat(500);
-        b.crowd(['limo', 'bus', 'limo']); b.flat(450);
-        b.check();
-        b.coinsArc(12, 110, 120, 320);
-        b.jumpPit(380, 220, 880, 'void'); b.flat(450);
-        b.coinsArc(12, 110, 120, 320);
-        b.jumpPit(380, 230, 900, 'void'); b.flat(650);
-        b.check();
-        b.waves(6, 280, 95); b.flat(450);
-        b.crowd(['truck', 'bus', 'truck', 'bus', 'truck']); b.flat(500);
-        b.coinsArc(14, 120, 160, 360);
-        b.busJump(460, 290, ['bus', 'stack', 'truck', 'bus', 'stack', 'limo', 'bus'], 0.5); b.flat(700);
-        b.finish();
-      }
+      id: 3, key: 'civic', veh: 'civic', name: 'MIDNIGHT TOUGE', vehName: 'CIVIC TYPE R', scene: 'touge', pitKind: 'void',
+      blurb: 'Tuning, néons, VTEC. Rapide et précise.',
+      c: { skyTop: '#05031a', skyBot: '#43207f', far: '#2a1656', mid: '#170c36', ground: '#262148', deep: '#0f0b24', edge: '#ff2e97', hazard: '#7a1aff', hazard2: '#ff4df0' },
+      names: [['ÉCHAUFFEMENT', 'Un tour pour chauffer les pneus'], ['COL DE NUIT', 'Enchaînements précis'], ['TOIT DU GARAGE', 'Plateformes en hauteur'], ['DRIFT PIT', 'Poutres et gouffres'], ['R-ÉVOLUTION', 'La descente finale']]
+    },
+    {
+      id: 4, key: 'truck', veh: 'truck', name: 'CHROME HIGHWAY', vehName: 'CAMION', scene: 'desert', pitKind: 'lava',
+      blurb: 'Poids lourd. Lent à lancer, impossible à arrêter.',
+      c: { skyTop: '#46105f', skyBot: '#ffb15c', far: '#c24f6e', mid: '#963a5c', ground: '#c9784e', deep: '#7a3b2a', edge: '#ffd28a', hazard: '#ff5500', hazard2: '#ffd000' },
+      names: [['DÉPART DÉPÔT', 'Chargement, démarrage'], ['DÉSERT', 'Droit devant'], ['PONT CASSÉ', 'Il manque un bout'], ['CONVOI', 'Écrase le trafic'], ['DERNIER RELAIS', 'Livraison finale']]
     }
   ];
 
-  // chaque niveau est joué en 2 boucles : la 1re se termine par un checkpoint au lieu de l'arrivée
-  function build(index) {
-    var b = Builder(), def = levels[index], loops = def.loops || 2;
-    var realFinish = b.finish;
-    for (var i = 0; i < loops; i++) {
-      if (i < loops - 1) { b.finish = function () { b.flat(500); b.check(); return b; }; }
-      else b.finish = realFinish;
-      def.build(b);
+  // seuils d'étoiles (calibrés par simulation) : [2★, 3★] et temps de référence
+  var CAL = {
+    1: { par: 12, stars: [1800, 3600] },
+    2: { par: 14, stars: [2500, 5000] },
+    3: { par: 15, stars: [2800, 5600] },
+    4: { par: 18, stars: [2100, 4200] },
+    5: { par: 20, stars: [2700, 5400] },
+    6: { par: 13, stars: [1400, 2700] },
+    7: { par: 14, stars: [2700, 5500] },
+    8: { par: 16, stars: [4900, 9800] },
+    9: { par: 24, stars: [5600, 11300] },
+    10: { par: 24, stars: [6300, 12600] },
+    11: { par: 12, stars: [1300, 2600] },
+    12: { par: 15, stars: [1800, 3600] },
+    13: { par: 18, stars: [4000, 8000] },
+    14: { par: 19, stars: [4600, 9200] },
+    15: { par: 22, stars: [5800, 11500] },
+    16: { par: 11, stars: [800, 1600] },
+    17: { par: 14, stars: [3300, 6700] },
+    18: { par: 21, stars: [2600, 5200] },
+    19: { par: 21, stars: [4700, 9400] },
+    20: { par: 25, stars: [3400, 6900] }
+  };
+
+  var levels = [];
+  WORLDS.forEach(function (w, wi) {
+    w.levels = [];
+    for (var li = 0; li < 5; li++) {
+      var id = wi * 5 + li + 1;
+      var cal = CAL[id] || { par: 30 + li * 4, stars: [3000 + li * 800, 6000 + li * 1500] };
+      var lv = {
+        id: id, world: wi, li: li, veh: w.veh, name: w.names[li][0], sub: w.names[li][1], theme: w.scene, c: w.c,
+        par: cal.par, stars: cal.stars, build: genLevel(w.veh, li, 1000 * (wi + 1) + 37 * li + 11, w.pitKind)
+      };
+      levels.push(lv); w.levels.push(lv);
     }
+  });
+
+  function build(index) {
+    var b = Builder();
+    levels[index].build(b);
     return b.done();
   }
+  function setCal(table) { Object.keys(table).forEach(function (k) { var l = levels[k - 1]; l.par = table[k].par; l.stars = table[k].stars; }); }
 
-  window.MV8_LEVELS = { STEP: STEP, KINDS: KINDS, COLORS: COLORS, levels: levels, build: build };
+  window.MV8_LEVELS = { STEP: STEP, KINDS: KINDS, COLORS: COLORS, worlds: WORLDS, levels: levels, build: build, setCal: setCal, CAL: CAL };
 })();

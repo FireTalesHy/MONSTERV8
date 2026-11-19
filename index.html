@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#0b0f14">
+<meta name="theme-color" content="#12052e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,6 +11,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Monoton&display=swap" rel="stylesheet">
 <title>MONSTER V8</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -33,64 +36,101 @@
   </div>
 </div>
 
+<!-- TITRE -->
 <section id="screen-menu" class="screen on">
-  <div class="panel left">
-    <h1><span>MONSTER</span><b>V8</b></h1>
-    <p class="tag">Coupé muscle car · gros pneus · zéro prudence</p>
-    <button id="btn-play" class="big">▶ JOUER</button>
-    <button id="btn-help" class="alt">Commandes</button>
+  <div class="title-block">
+    <div class="kick">MIAMI · 1986 · ARCADE</div>
+    <h1><span class="chrome">MONSTER</span><b class="neon">V8</b></h1>
+    <p class="tag">4 mondes · 4 véhicules · 20 parcours</p>
+    <button id="btn-play" class="btn primary">▶ Jouer</button>
+    <button id="btn-help" class="btn ghost">Commandes</button>
     <p class="rotate-hint">↻ Tourne ta tablette en mode paysage pour une meilleure vue</p>
   </div>
 </section>
 
-<section id="screen-levels" class="screen">
-  <div class="panel wide">
-    <h2>CHOISIS TON ARÈNE</h2>
-    <div class="garage"><span>Peinture</span><div id="swatches"></div></div>
+<!-- MONDES -->
+<section id="screen-worlds" class="screen">
+  <div class="wide">
+    <div class="kick">4 MONDES · 4 VÉHICULES · 20 PARCOURS</div>
+    <h2 class="h-pink">CHOISIS TON MONDE</h2>
+    <div id="world-grid"></div>
+    <button id="btn-worlds-back" class="btn ghost small">← Retour</button>
+  </div>
+</section>
+
+<!-- NIVEAUX D'UN MONDE -->
+<section id="screen-levels" class="screen" data-world="1">
+  <div class="wide">
+    <div class="levels-head">
+      <div>
+        <div class="kick" id="lv-kick">MONDE 1</div>
+        <h2 class="h-pink" id="lv-title">OCEAN DRIVE</h2>
+      </div>
+      <div class="garage"><span>PEINTURE</span><div id="swatches"></div></div>
+    </div>
     <div id="level-grid"></div>
-    <button id="btn-levels-back" class="alt">← Retour</button>
+    <button id="btn-levels-back" class="btn ghost small">← Mondes</button>
   </div>
 </section>
 
 <section id="screen-help" class="screen">
   <div class="panel">
-    <h2>COMMANDES</h2>
+    <div class="kick">MODE D'EMPLOI</div>
+    <h2 class="h-pink">COMMANDES</h2>
     <ul class="help">
       <li><kbd>↑</kbd> / <kbd>W</kbd> gaz</li>
       <li><kbd>↓</kbd> / <kbd>S</kbd> frein, puis marche arrière</li>
       <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> rotation en l'air (flips !)</li>
       <li><kbd>Espace</kbd> nitro</li>
-      <li><kbd>R</kbd> retour au dernier checkpoint · <kbd>P</kbd> pause · <kbd>M</kbd> son</li>
+      <li><kbd>R</kbd> recommencer · <kbd>P</kbd> pause · <kbd>M</kbd> son</li>
     </ul>
-    <p class="tip">Écrase les voitures, ramasse les pièces V8, enchaîne les sauts et les flips pour faire grimper le combo. Réceptionne sur les roues pour valider tes figures. Sur tablette ou mobile, utilise les boutons à l'écran (multi-touch : accélère et incline en même temps).</p>
-    <button id="btn-help-back" class="alt">← Retour</button>
+    <p class="tip"><b>Un crash fait exploser ton véhicule et te fait perdre le parcours</b> : toit au sol, réception ratée, chute dans le vide. Écrase les obstacles, ramasse les pièces V8, passe sur les pads de boost, enchaîne sauts et flips pour monter le combo. Sur tablette ou mobile, utilise les boutons à l'écran (multi-touch).</p>
+    <button id="btn-help-back" class="btn ghost">← Retour</button>
   </div>
 </section>
 
-<section id="screen-pause" class="screen">
-  <div class="panel">
-    <h2>PAUSE</h2>
-    <button id="btn-resume" class="big">Reprendre</button>
-    <button id="btn-restart" class="alt">Recommencer</button>
-    <button id="btn-quit" class="alt">Choisir un niveau</button>
+<section id="screen-pause" class="screen dim">
+  <div class="panel narrow">
+    <div class="kick pink">EN ATTENTE</div>
+    <h2 class="neon-title">PAUSE</h2>
+    <button id="btn-resume" class="btn primary">Reprendre</button>
+    <button id="btn-restart" class="btn ghost">Recommencer</button>
+    <button id="btn-quit" class="btn ghost">Quitter le parcours</button>
   </div>
 </section>
 
-<section id="screen-result" class="screen">
+<section id="screen-result" class="screen dim">
   <div class="panel">
-    <h2 id="res-title">NIVEAU TERMINÉ</h2>
+    <div class="kick" id="res-kick">MONDE 1</div>
+    <h2 class="h-gold" id="res-title">PARCOURS RÉUSSI</h2>
     <div id="res-stars" class="stars">★★★</div>
     <div class="score"><span id="res-score">0</span><small>points</small></div>
     <div id="res-goal" class="goal"></div>
     <ul id="res-stats" class="stats"></ul>
-    <button id="btn-next" class="big">Niveau suivant ▶</button>
-    <button id="btn-retry" class="alt">Rejouer</button>
-    <button id="btn-res-menu" class="alt">Niveaux</button>
+    <button id="btn-next" class="btn primary">Parcours suivant ▶</button>
+    <div class="row">
+      <button id="btn-retry" class="btn ghost">Rejouer</button>
+      <button id="btn-res-menu" class="btn ghost">Parcours</button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-defeat" class="screen defeat">
+  <div class="defeat-block">
+    <div class="kick">VÉHICULE DÉTRUIT</div>
+    <div class="boom">BOOM</div>
+    <p id="def-reason" class="reason"></p>
+    <div class="row center">
+      <button id="btn-def-retry" class="btn primary">↻ Réessayer</button>
+      <button id="btn-def-menu" class="btn ghost">Parcours</button>
+    </div>
+    <button id="btn-def-skip" class="btn ghost small hidden">Passer ce parcours ▶</button>
   </div>
 </section>
 
 <script src="js/levels.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/vehicles.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>
