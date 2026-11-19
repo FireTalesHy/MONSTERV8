@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0b0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Monster V8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>MONSTER V8</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,6 +19,7 @@
 
 <button id="pausebtn" class="hidden" aria-label="Pause">⏸</button>
 <button id="btn-mute" aria-label="Son">🔊</button>
+<button id="btn-full" aria-label="Plein écran">⛶</button>
 
 <div id="touch" class="hidden">
   <div class="grp l">
@@ -31,6 +39,7 @@
     <p class="tag">Coupé muscle car · gros pneus · zéro prudence</p>
     <button id="btn-play" class="big">▶ JOUER</button>
     <button id="btn-help" class="alt">Commandes</button>
+    <p class="rotate-hint">↻ Tourne ta tablette en mode paysage pour une meilleure vue</p>
   </div>
 </section>
 
@@ -53,7 +62,7 @@
       <li><kbd>Espace</kbd> nitro</li>
       <li><kbd>R</kbd> retour au dernier checkpoint · <kbd>P</kbd> pause · <kbd>M</kbd> son</li>
     </ul>
-    <p class="tip">Écrase les voitures, ramasse les pièces V8, enchaîne les sauts et les flips pour faire grimper le combo. Réceptionne sur les roues pour valider tes figures. Sur mobile, utilise les boutons à l'écran.</p>
+    <p class="tip">Écrase les voitures, ramasse les pièces V8, enchaîne les sauts et les flips pour faire grimper le combo. Réceptionne sur les roues pour valider tes figures. Sur tablette ou mobile, utilise les boutons à l'écran (multi-touch : accélère et incline en même temps).</p>
     <button id="btn-help-back" class="alt">← Retour</button>
   </div>
 </section>

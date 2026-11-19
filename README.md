@@ -1,6 +1,6 @@
 # 🏁 MONSTER V8
 
-Un jeu de monster truck arcade en 2D, jouable directement dans le navigateur : un **coupé américain V8** sur de gros pneus, des voitures à écraser, des rampes géantes, des flips et du nitro.
+Un jeu de monster truck arcade en **2.5D**, jouable au clavier, sur tablette et sur mobile, directement dans le navigateur : un **coupé américain V8** sur de gros pneus, des voitures à écraser, des rampes géantes, des flips et du nitro.
 
 ▶ **Jouer :** https://firetaleshy.github.io/MONSTERV8/
 
@@ -15,6 +15,12 @@ Un jeu de monster truck arcade en 2D, jouable directement dans le navigateur : u
 | Dernier checkpoint | `R` | |
 | Pause / Son | `P` ou `Échap` / `M` | ⏸ / 🔊 |
 
+## Tablette & mobile
+
+- Boutons tactiles proportionnels à l'écran (téléphone → iPad), **multi-touch** : gaz + inclinaison + nitro en même temps.
+- Paysage ou portrait, bouton **plein écran** ⛶, résolution adaptée automatiquement si l'appareil rame.
+- Installable comme une appli : *Partager → Sur l'écran d'accueil* (iPad) ou *Installer* (Android/Chrome), lancement en plein écran paysage.
+
 ## Le jeu
 
 - 6 niveaux : Ferraille Park, Boue & Marais, Stade des Rampes, Mont Glacé, Volcan en Fusion, Arène Finale.
@@ -26,10 +32,11 @@ Un jeu de monster truck arcade en 2D, jouable directement dans le navigateur : u
 
 ## Technique
 
-JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Physique maison (suspensions à ressorts, collisions sur terrain, gravité allégée) réglée pour le plaisir plutôt que pour le réalisme.
+JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Rendu 2.5D : physique en 2D, mais piste à plusieurs voies, roues du côté éloigné, carrosserie extrudée, ombres, décor étagé en parallaxe, premier plan et vignettage. Physique maison (suspensions à ressorts, collisions sur terrain, gravité allégée) réglée pour le plaisir plutôt que pour le réalisme.
 
 ```
 index.html     page + écrans (menu, niveaux, pause, résultats)
+manifest.webmanifest, icon*.png   installation sur l'écran d'accueil
 style.css      interface
 js/levels.js   générateur de terrain et définition des 6 niveaux
 js/audio.js    sons (moteur V8, nitro, écrasements…)
