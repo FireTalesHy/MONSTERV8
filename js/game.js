@@ -635,16 +635,24 @@
     }
     car.rpm = Math.max(E.idle * 0.8, car.rpm);
     car.limT += dt;
+    // échappement libre : pétarades quand on lève le pied à haut régime
+    if (car.lastThr && !thr && car.rpm > E.lim * 0.5) car.crackT = 0.5 + 0.6 * (car.rpm / E.lim);
+    car.lastThr = thr;
+    if (thr) car.crackT = 0;
+    if (car.crackT > 0) {
+      car.crackT -= dt;
+      if (Math.random() < dt * 16) limiterPop(E, true);
+    }
     if (state === 'play') SND.engine(car.rpm, thr, car.boosting, V.engine, car.cutT > 0);
   }
   // pétarade à l'échappement sur le rupteur
-  function limiterPop(E) {
+  function limiterPop(E, overrun) {
     var car = S.car;
-    if (V.engine === 'diesel' || Math.random() > (V.engine === 'vtec' ? 0.75 : 0.45)) return;
+    if (V.engine === 'diesel' ? !overrun || Math.random() > 0.3 : !overrun && Math.random() > (V.engine === 'vtec' ? 0.8 : 0.55)) return;
     var ca = Math.cos(car.a), sa = Math.sin(car.a);
     var ex = car.x + V.exhaust[0] * ca - V.exhaust[1] * sa, ey = car.y + V.exhaust[0] * sa + V.exhaust[1] * ca;
     for (var f = 0; f < 3; f++) spawn(ex, ey, -ca * rnd(250, 520) + car.vx * 0.6, -sa * rnd(250, 520) + car.vy * 0.6 + rnd(-40, 40), rnd(0.06, 0.14), rnd(5, 10), f ? '#ffb020' : '#ffe2a0', 0, true);
-    SND.pop();
+    SND.pop(overrun && Math.random() < 0.3);
   }
 
   function effects(dt, inp) {

@@ -46,7 +46,7 @@
   // ---------------------------------------------------------------- synthèse (secours)
   function curve(k) {
     var n = 256, c = new Float32Array(n);
-    for (var i = 0; i < n; i++) { var x = i * 2 / n - 1; c[i] = Math.tanh(x * k); }
+    for (var i = 0; i < n; i++) { var x = i * 2 / n - 1; c[i] = Math.tanh(x * k) / Math.tanh(k); }
     return c;
   }
 
@@ -101,10 +101,11 @@
   // ---------------------------------------------------------------- moteur à boucles enregistrées
   // layers : boucles du ralenti au haut régime · rate : hauteur de lecture au ralenti / à la zone rouge · rpm : plage du compte-tours
   var SPROF = {
-    v8:     { layers: ['idle', 'mid', 'high'], rate: [0.82, 1.8], rpm: [900, 6500], g: 0.62 },
-    vtec:   { layers: ['idle', 'mid', 'high'], rate: [1.15, 3.0], rpm: [1000, 9600], g: 0.55, vtec: 0.56 },
-    bike:   { layers: ['idle', 'mid', 'high'], rate: [1.5, 3.5], rpm: [1400, 13800], g: 0.5 },
-    diesel: { layers: ['hlow', 'hhigh'], rate: [0.78, 1.32], rpm: [650, 2300], g: 0.7 }
+    // drive : saturation (échappement libre) · boom / rasp : fréquences du grondement et du rugissement métallique
+    v8:     { layers: ['idle', 'mid', 'high'], rate: [0.82, 1.8], rpm: [900, 6500], g: 0.5, drive: 2.6, boom: 95, rasp: 1700 },
+    vtec:   { layers: ['idle', 'mid', 'high'], rate: [1.15, 3.0], rpm: [1000, 9600], g: 0.44, vtec: 0.56, drive: 2.1, boom: 150, rasp: 3200 },
+    bike:   { layers: ['idle', 'mid', 'high'], rate: [1.5, 3.5], rpm: [1400, 13800], g: 0.42, drive: 2.3, boom: 130, rasp: 3600 },
+    diesel: { layers: ['hlow', 'hhigh'], rate: [0.78, 1.32], rpm: [650, 2300], g: 0.48, drive: 1.8, boom: 70, rasp: 900 }
   };
   var es = null;
   function samplesReady(P) { for (var i = 0; i < P.layers.length; i++) if (!buf[P.layers[i]]) return false; return true; }
@@ -112,22 +113,35 @@
     if (!es) return;
     var old = es; es = null;
     set(old.out.gain, 0, 0.05);
-    setTimeout(function () { old.srcs.forEach(function (s) { try { s.stop(); } catch (e) { /* déjà arrêté */ } }); }, 300);
+    setTimeout(function () { old.srcs.forEach(function (s) { try { s.stop(); } catch (e) { /* déjà arrêté */ } }); try { old.out.disconnect(); old.wet.disconnect(); } catch (e) { /* ok */ } }, 600);
   }
   function startSampleEngine(prof, P) {
     stopSampleEngine();
+    // chaîne « échappement libre, entendu de l'extérieur » :
+    // boucles → pré-gain → saturation → grondement (graves) + rugissement (médiums) → filtre ouvert → sortie
+    //                                                                        ↘ réflexion sol/murs (court écho) ↗
     var out = ac.createGain(); out.gain.value = 0;
-    var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2000; lp.Q.value = 0.7;
-    lp.connect(out); out.connect(master);
+    var pre = ac.createGain(); pre.gain.value = 1;
+    var ws = ac.createWaveShaper(); ws.curve = curve(1.4); ws.oversample = '2x';
+    var boom = ac.createBiquadFilter(); boom.type = 'lowshelf'; boom.frequency.value = P.boom; boom.gain.value = 7;
+    var rasp = ac.createBiquadFilter(); rasp.type = 'peaking'; rasp.frequency.value = P.rasp; rasp.Q.value = 0.9; rasp.gain.value = 6;
+    var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6000; lp.Q.value = 0.5;
+    var post = ac.createGain(); post.gain.value = 0.62;
+    pre.connect(ws); ws.connect(boom); boom.connect(rasp); rasp.connect(lp); lp.connect(post); post.connect(out); out.connect(master);
+    var dl = ac.createDelay(0.2); dl.delayTime.value = 0.038;
+    var fb = ac.createGain(); fb.gain.value = 0.22;
+    var dlp = ac.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 1800;
+    var wet = ac.createGain(); wet.gain.value = 0.26;
+    out.connect(dl); dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(wet); wet.connect(master);
     var srcs = [], gains = [];
     P.layers.forEach(function (k) {
       var s = ac.createBufferSource(); s.buffer = buf[k]; s.loop = true;
       var g = ac.createGain(); g.gain.value = 0;
-      s.connect(g); g.connect(lp);
+      s.connect(g); g.connect(pre);
       s.start(ac.currentTime, Math.random() * buf[k].duration);
       srcs.push(s); gains.push(g);
     });
-    es = { prof: prof, srcs: srcs, gains: gains, lp: lp, out: out };
+    es = { prof: prof, srcs: srcs, gains: gains, lp: lp, out: out, pre: pre, rasp: rasp, wet: wet, P: P };
   }
 
   // rpm : régime moteur ; throttle 0..1 ; boost bool ; prof : nom du profil
@@ -148,8 +162,11 @@
         set(es.gains[i].gain, w, 0.05);
         set(es.srcs[i].playbackRate, rate, 0.05);
       }
-      set(es.lp.frequency, 700 + throttle * 4200 + k * 2800, 0.06);  // étouffé quand on lâche les gaz
-      set(es.out.gain, SP.g * (0.42 + 0.58 * throttle) * (boost ? 1.15 : 1) * cutK, cut || throttle ? cutTc : 0.06);
+      // pied au plancher : saturation et rugissement montent ; pied levé : son plus creux mais toujours ouvert
+      set(es.pre.gain, 0.8 + SP.drive * (0.35 + 0.65 * throttle) * (0.6 + 0.4 * k), 0.05);
+      set(es.rasp.gain, 3 + 6 * throttle * (0.5 + 0.5 * k), 0.06);
+      set(es.lp.frequency, 1800 + throttle * 5200 + k * 3500, 0.05);
+      set(es.out.gain, SP.g * (0.5 + 0.5 * throttle) * (boost ? 1.15 : 1) * cutK, cut || throttle ? cutTc : 0.06);
       set(eng.out.gain, 0, 0.05);
       set(boostGain.gain, boost ? 0.12 : 0, 0.06);
       set(boostFilter.frequency, boost ? 1800 : 900, 0.1);
@@ -209,10 +226,12 @@
     silence: silence,
     setMuted: function (m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5; },
     isMuted: function () { return muted; },
+    _master: function () { return master; },
     loaded: function () { return Object.keys(buf).length + '/' + Object.keys(FILES).length; },
-    pop: function () {         // pétarade d'échappement (rupteur)
-      burst(0.05, rnd(900, 1600), 1.2, 0.22, 'bandpass', 300);
-      if (Math.random() < 0.5) setTimeout(function () { burst(0.04, rnd(700, 1300), 1.2, 0.16, 'bandpass', 250); }, 35);
+    pop: function (big) {      // pétarade d'échappement libre (rupteur, lever de pied)
+      if (big) { burst(0.12, 700, 0.8, 0.5, 'lowpass', 90); burst(0.05, 2400, 1, 0.22, 'bandpass', 600); return; }
+      burst(0.05, rnd(900, 1600), 1.2, 0.3, 'bandpass', 300);
+      if (Math.random() < 0.55) setTimeout(function () { burst(0.04, rnd(700, 1300), 1.2, 0.22, 'bandpass', 250); }, 30 + Math.random() * 40);
     },
     crush: function () {
       if (!play(['crush1', 'crush2', 'crush3'][Math.floor(Math.random() * 3)], 0.75, rnd(0.88, 1.1))) { burst(0.35, 1800, 1, 0.9, 'lowpass', 200); tone(110, 0.25, 0.5, 'sawtooth', 40); }
