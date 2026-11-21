@@ -225,28 +225,28 @@
     {
       id: 1, key: 'moto', veh: 'moto', name: 'OCEAN DRIVE', vehName: 'MOTO', scene: 'beach', pitKind: 'water',
       blurb: 'Légère, nerveuse, wheelies faciles. Gare à la tête.',
-      c: { skyTop: '#2a0a5e', skyBot: '#ff9a6c', far: '#9b3fa8', mid: '#5f2a8c', ground: '#e9b88f', deep: '#a8603f', edge: '#ffd9b8', hazard: '#00c6e0', hazard2: '#9bffe6' },
+      c: { skyTop: '#16294f', skyBot: '#f6c38c', far: '#7a6390', mid: '#4d3f66', ground: '#c7a06c', deep: '#7d5c38', edge: '#d8bd90', hazard: '#1d6f8a', hazard2: '#7fc8d8' },
       names: [['PREMIÈRE VAGUE', 'Les bases du parcours'], ['PALMIERS', 'Sauts entre les dunes'], ['RESSORTS', 'Premiers tremplins à ressort'], ['ANNEAUX', 'Vise les anneaux de feu'], ['BARILS', 'Attention à la TNT'],
         ['PONTON', 'Plateformes sur l\'eau'], ['MARÉE HAUTE', 'Ça monte et ça descend'], ['JETÉE', 'Sauts au bout du quai'], ['TEMPÊTE', 'Plus vite, plus loin'], ['GRAND FINAL', 'Tout Ocean Drive']]
     },
     {
-      id: 2, key: 'monster', veh: 'monster', name: 'NEON JUNKYARD', vehName: 'MONSTER TRUCK', scene: 'junk', pitKind: 'lava',
+      id: 2, key: 'monster', veh: 'monster', name: 'NEON JUNKYARD', vehName: 'MONSTER TRUCK', scene: 'junk', pitKind: 'fire',
       blurb: 'Coupé V8 sur gros pneus. Écrase tout, vole haut.',
-      c: { skyTop: '#12052e', skyBot: '#b3207f', far: '#43157a', mid: '#2a0d52', ground: '#3a2562', deep: '#1b0e38', edge: '#00e5ff', hazard: '#ff2e97', hazard2: '#ffe14d' },
+      c: { skyTop: '#0b1229', skyBot: '#d9875f', far: '#2c2a46', mid: '#1b1a2c', ground: '#5a4836', deep: '#2e251c', edge: '#8a7458', hazard: '#ff6a1a', hazard2: '#ffd24a' },
       names: [['FERRAILLE', 'Écrase les premières épaves'], ['ÉCRASE-TOUT', 'Piles de voitures'], ['GROS RESSORTS', 'Bondis par-dessus la lave'], ['ANNEAUX DE FEU', 'Le grand show'], ['DYNAMITE', 'Les barils sautent'],
         ['TOUR DE GRUE', 'Sauts au-dessus du vide'], ['COMPACTEUR', 'Murs et plateaux'], ['PILES DE BUS', 'Les gros porteurs'], ['CHAOS', 'Tout en même temps'], ['CASSE FINALE', 'Le grand spectacle']]
     },
     {
       id: 3, key: 'civic', veh: 'civic', name: 'MIDNIGHT TOUGE', vehName: 'CIVIC TYPE R', scene: 'touge', pitKind: 'void',
       blurb: 'Hatchback tuning, néons verts, VTEC. Rapide et précise.',
-      c: { skyTop: '#05031a', skyBot: '#43207f', far: '#2a1656', mid: '#170c36', ground: '#262148', deep: '#0f0b24', edge: '#ff2e97', hazard: '#7a1aff', hazard2: '#ff4df0' },
+      c: { skyTop: '#02050d', skyBot: '#1b2a4c', far: '#141d35', mid: '#0b1222', ground: '#3a3a40', deep: '#1c1c20', edge: '#7a7c84', hazard: '#0a0c14', hazard2: '#1a2233' },
       names: [['ÉCHAUFFEMENT', 'Un tour pour chauffer les pneus'], ['COL DE NUIT', 'Enchaînements précis'], ['TOIT DU GARAGE', 'Rebonds en hauteur'], ['TUNNEL NÉON', 'Anneaux dans la nuit'], ['FEU D\'ARTIFICE', 'Barils explosifs'],
         ['ÉPINGLES', 'Virages serrés… en ligne droite'], ['PARKING VIDE', 'Plateaux et ressorts'], ['SAUT DU PONT', 'Le vide sous les roues'], ['VTEC KICK', 'À fond dans les tours'], ['R-ÉVOLUTION', 'La descente finale']]
     },
     {
-      id: 4, key: 'truck', veh: 'truck', name: 'CHROME HIGHWAY', vehName: 'CAMION', scene: 'desert', pitKind: 'lava',
+      id: 4, key: 'truck', veh: 'truck', name: 'CHROME HIGHWAY', vehName: 'CAMION', scene: 'desert', pitKind: 'canyon',
       blurb: 'Poids lourd. Lent à lancer, impossible à arrêter.',
-      c: { skyTop: '#46105f', skyBot: '#ffb15c', far: '#c24f6e', mid: '#963a5c', ground: '#c9784e', deep: '#7a3b2a', edge: '#ffd28a', hazard: '#ff5500', hazard2: '#ffd000' },
+      c: { skyTop: '#26406e', skyBot: '#ffd9a2', far: '#a26f70', mid: '#7c4a3f', ground: '#b0603a', deep: '#6e3a22', edge: '#c98a5c', hazard: '#2a1a14', hazard2: '#5a3a28' },
       names: [['DÉPART DÉPÔT', 'Chargement, démarrage'], ['DÉSERT', 'Droit devant'], ['RESSORTS GÉANTS', '30 tonnes en l\'air'], ['ANNEAUX DU CANYON', 'Vise juste'], ['DYNAMITE', 'Livraison explosive'],
         ['PONT CASSÉ', 'Il manque un bout'], ['CONVOI', 'Écrase le trafic'], ['CANYON', 'Gouffres et falaises'], ['MIRAGE', 'Le désert sans fin'], ['DERNIER RELAIS', 'Livraison finale']]
     }

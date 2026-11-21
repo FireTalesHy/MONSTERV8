@@ -1,6 +1,6 @@
 # 🏁 MONSTER V8
 
-Jeu de parcours arcade en **2.5D** dans un univers **Miami vaporwave**, jouable au clavier, sur tablette et sur mobile, directement dans le navigateur.
+Jeu de parcours arcade en **2.5D** dans un univers **Miami 1986** au rendu **réaliste** (ciels dégradés, textures de sol, brume atmosphérique, lumière et poussière), jouable au clavier, sur tablette et sur mobile, directement dans le navigateur.
 
 ▶ **Jouer :** https://firetaleshy.github.io/MONSTERV8/
 
@@ -51,14 +51,15 @@ Boutons tactiles proportionnels à l'écran, multi-touch, plein écran ⛶, port
 
 ## Technique
 
-JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Physique maison à suspensions, quatre profils de véhicule, assistances arcade (redressement en l'air, bords de falaise, chocs plafonnés), sons synthétisés (Web Audio). Les 40 parcours sont générés par segments à partir d'une graine fixe ; leur faisabilité et leurs seuils d'étoiles sont vérifiés par simulation.
+JavaScript pur + `<canvas>`, **aucune dépendance, aucun build**. Physique maison à suspensions, quatre profils de véhicule, assistances arcade (redressement en l'air, bords de falaise, chocs plafonnés), rendu réaliste dessiné en temps réel (textures procédurales, carrosseries métallisées, chromes, vitres, jantes alu, étalonnage des couleurs), **vrais sons enregistrés** (banque libre OpenGameArt, voir `sounds/CREDITS.md`) mixés en Web Audio avec repli synthétisé. Les 40 parcours sont générés par segments à partir d'une graine fixe ; leur faisabilité et leurs seuils d'étoiles sont vérifiés par simulation.
 
 ```
 index.html           page + écrans (titre, mondes, parcours, garage, trophées, pause, victoire, défaite)
-style.css            menus Miami vaporwave
+style.css            menus sobres façon jeu de course (panneaux vitrés, Barlow Condensed)
 js/vehicles.js       les 4 véhicules : paramètres physiques + dessin
 js/levels.js         4 mondes × 10 parcours + défi du jour, générés par segments
-js/audio.js          moteurs, nitro, ressorts, anneaux, explosions…
+js/audio.js          moteur audio : échantillons réels + repli synthétisé
+sounds/              banque de sons libres (CC0 / CC-BY, crédits dans CREDITS.md)
 js/game.js           physique, rendu, HUD, garage, trophées, menus
 manifest.webmanifest, icon*.png   installation sur l'écran d'accueil
 ```
@@ -67,4 +68,4 @@ La progression est enregistrée dans le navigateur (`localStorage`) ; les ancien
 
 ## Lancer en local
 
-Ouvrir `index.html` dans un navigateur, ou `python3 -m http.server` puis http://localhost:8000.
+Lancer `python3 -m http.server` puis ouvrir http://localhost:8000 (les sons ne se chargent pas en `file://` ; le jeu reste jouable avec les sons synthétisés).
