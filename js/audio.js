@@ -125,6 +125,13 @@
       [523, 659, 784, 1046].forEach(function (f, i) { tone(f, 0.28, 0.3, 'square', null, i * 0.13); });
       tone(1046, 0.7, 0.3, 'square', null, 0.55);
     },
-    click: function () { tone(440, 0.05, 0.2, 'square'); }
+    click: function () { tone(440, 0.05, 0.2, 'square'); },
+    nitroGo: function () { burst(0.9, 600, 0.9, 0.8, 'bandpass', 3500); tone(110, 0.5, 0.35, 'sawtooth', 330); },
+    nitroPick: function () { tone(523, 0.08, 0.25, 'square'); tone(784, 0.08, 0.25, 'square', null, 0.06); tone(1046, 0.16, 0.22, 'square', null, 0.12); },
+    spring: function () { tone(180, 0.35, 0.5, 'sine', 720); tone(360, 0.25, 0.2, 'triangle', 1100, 0.03); },
+    ring: function () { tone(988, 0.12, 0.25, 'triangle'); tone(1319, 0.12, 0.25, 'triangle', null, 0.06); tone(1976, 0.25, 0.22, 'triangle', null, 0.12); burst(0.3, 3000, 1, 0.25, 'highpass', 6000); },
+    tnt: function () { burst(0.8, 2600, 0.8, 1, 'lowpass', 80); tone(60, 0.7, 0.8, 'sine', 25); },
+    buy: function () { tone(660, 0.08, 0.25, 'square'); tone(880, 0.08, 0.25, 'square', null, 0.07); tone(1320, 0.18, 0.25, 'square', null, 0.14); },
+    trophy: function () { [784, 988, 1175, 1568].forEach(function (f, i) { tone(f, 0.22, 0.25, 'triangle', null, i * 0.09); }); }
   };
 })();

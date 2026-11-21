@@ -41,9 +41,15 @@
   <div class="title-block">
     <div class="kick">MIAMI · 1986 · ARCADE</div>
     <h1><span class="chrome">MONSTER</span><b class="neon">V8</b></h1>
-    <p class="tag">4 mondes · 4 véhicules · 20 parcours</p>
+    <p class="tag">4 mondes · 4 véhicules · 40 parcours</p>
     <button id="btn-play" class="btn primary">▶ Jouer</button>
-    <button id="btn-help" class="btn ghost">Commandes</button>
+    <button id="btn-daily" class="btn daily">★ Défi du jour</button>
+    <div class="row three">
+      <button id="btn-garage" class="btn ghost">Garage</button>
+      <button id="btn-troph" class="btn ghost">Trophées</button>
+      <button id="btn-help" class="btn ghost">Commandes</button>
+    </div>
+    <div class="wallet">CRÉDITS <b class="credits-val">0</b></div>
     <p class="rotate-hint">↻ Tourne ta tablette en mode paysage pour une meilleure vue</p>
   </div>
 </section>
@@ -51,7 +57,7 @@
 <!-- MONDES -->
 <section id="screen-worlds" class="screen">
   <div class="wide">
-    <div class="kick">4 MONDES · 4 VÉHICULES · 20 PARCOURS</div>
+    <div class="kick">4 MONDES · 4 VÉHICULES · 40 PARCOURS</div>
     <h2 class="h-pink">CHOISIS TON MONDE</h2>
     <div id="world-grid"></div>
     <button id="btn-worlds-back" class="btn ghost small">← Retour</button>
@@ -69,7 +75,10 @@
       <div class="garage"><span>PEINTURE</span><div id="swatches"></div></div>
     </div>
     <div id="level-grid"></div>
-    <button id="btn-levels-back" class="btn ghost small">← Mondes</button>
+    <div class="row-left">
+      <button id="btn-levels-back" class="btn ghost small">← Mondes</button>
+      <button id="btn-lv-garage" class="btn ghost small">Garage · <b class="credits-val">0</b> cr</button>
+    </div>
   </div>
 </section>
 
@@ -81,8 +90,15 @@
       <li><kbd>↑</kbd> / <kbd>W</kbd> gaz</li>
       <li><kbd>↓</kbd> / <kbd>S</kbd> frein, puis marche arrière</li>
       <li><kbd>←</kbd> <kbd>→</kbd> / <kbd>A</kbd> <kbd>D</kbd> rotation en l'air (flips !)</li>
-      <li><kbd>Espace</kbd> nitro</li>
+      <li><kbd>Espace</kbd> ou clic sur l'écran : boost nitro de 2 s (utilise un bidon)</li>
       <li><kbd>R</kbd> recommencer · <kbd>P</kbd> pause · <kbd>M</kbd> son</li>
+    </ul>
+    <ul class="legend">
+      <li><span class="lg nitro"></span>Bidon de nitro : recharge un boost (tu en portes 2, plus avec le garage)</li>
+      <li><span class="lg pad"></span>Pad de boost : accélère</li>
+      <li><span class="lg spring"></span>Tremplin à ressort : te propulse en l'air</li>
+      <li><span class="lg ring"></span>Anneau de feu : traverse-le pour des points et du nitro</li>
+      <li><span class="lg tnt"></span>Baril de TNT : l'explosion te soulève (sans te détruire)</li>
     </ul>
     <p class="tip"><b>Un crash fait exploser ton véhicule et te fait perdre le parcours</b> : toit au sol, réception ratée, chute dans le vide. Écrase les obstacles, ramasse les pièces V8, passe sur les pads de boost, enchaîne sauts et flips pour monter le combo. Sur tablette ou mobile, utilise les boutons à l'écran (multi-touch).</p>
     <button id="btn-help-back" class="btn ghost">← Retour</button>
@@ -106,6 +122,7 @@
     <div id="res-stars" class="stars">★★★</div>
     <div class="score"><span id="res-score">0</span><small>points</small></div>
     <div id="res-goal" class="goal"></div>
+    <div id="res-credits" class="credits-earned"></div>
     <ul id="res-stats" class="stats"></ul>
     <button id="btn-next" class="btn primary">Parcours suivant ▶</button>
     <div class="row">
@@ -120,13 +137,52 @@
     <div class="kick">VÉHICULE DÉTRUIT</div>
     <div class="boom">BOOM</div>
     <p id="def-reason" class="reason"></p>
+    <p id="def-credits" class="credits-earned"></p>
     <div class="row center">
       <button id="btn-def-retry" class="btn primary">↻ Réessayer</button>
       <button id="btn-def-menu" class="btn ghost">Parcours</button>
+      <button id="btn-def-garage" class="btn ghost">Garage</button>
     </div>
     <button id="btn-def-skip" class="btn ghost small hidden">Passer ce parcours ▶</button>
   </div>
 </section>
+
+<!-- GARAGE -->
+<section id="screen-garage" class="screen">
+  <div class="wide">
+    <div class="levels-head">
+      <div>
+        <div class="kick">AMÉLIORATIONS</div>
+        <h2 class="h-pink">GARAGE</h2>
+      </div>
+      <div class="wallet big">CRÉDITS <b class="credits-val">0</b></div>
+    </div>
+    <div id="gar-tabs" class="gtabs"></div>
+    <div class="gbody">
+      <div id="gar-prev" class="gprev"></div>
+      <div id="gar-list" class="glist"></div>
+    </div>
+    <p class="tip center">Les crédits se gagnent avec les pièces V8 (10 chacune, même en cas de crash), le score des parcours terminés, les nouvelles étoiles, les défis du jour et les trophées.</p>
+    <button id="btn-garage-back" class="btn ghost small">← Retour</button>
+  </div>
+</section>
+
+<!-- TROPHÉES -->
+<section id="screen-trophies" class="screen">
+  <div class="wide">
+    <div class="levels-head">
+      <div>
+        <div class="kick">SUCCÈS · <span id="troph-count">0</span></div>
+        <h2 class="h-gold">TROPHÉES</h2>
+      </div>
+      <div class="wallet big">CRÉDITS <b class="credits-val">0</b></div>
+    </div>
+    <div id="troph-list" class="troph-list"></div>
+    <button id="btn-troph-back" class="btn ghost small">← Retour</button>
+  </div>
+</section>
+
+<div id="toast" aria-live="polite"></div>
 
 <script src="js/levels.js"></script>
 <script src="js/audio.js"></script>

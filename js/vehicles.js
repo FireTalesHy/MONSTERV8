@@ -17,28 +17,28 @@
   var VEH = {
     moto: {
       key: 'moto', name: 'MOTO', WR: 24, WB: 56, R: 50, K: 85, C: 9, KH: 500, INV_I: 1 / 1050,
-      P: 1000, BRAKE: 1300, VMAX: 2100, RMAX: 600, MU: 2.8, BOOST: 1700, DQ: 0.00024, WHEELIE: 2.4, AIR_ROT: 13, WMAX: 10,
+      P: 1000, BRAKE: 1300, VMAX: 2100, RMAX: 600, MU: 2.8, BOOST: 1700, DQ: 0.00024, WHEELIE: 2.4, AIR_ROT: 22, WMAX: 14,
       zoom: 1.35, engine: 'bike', glow: '#00e5ff', paint: { a: '#ff4fae', b: '#a3125f' },
       pts: [[48, -52], [30, -46], [-72, -42], [6, -92], [-24, -72], [68, -34]], roof: { 3: 1, 4: 1 },
       exhaust: [-80, -26], far: false
     },
     monster: {
       key: 'monster', name: 'MONSTER TRUCK', WR: 38, WB: 68, R: 78, K: 46, C: 10, KH: 420, INV_I: 1 / 2800,
-      P: 820, BRAKE: 1100, VMAX: 1800, RMAX: 520, MU: 2.6, BOOST: 1500, DQ: 0.00026, WHEELIE: 1.0, AIR_ROT: 9.5, WMAX: 8.5,
+      P: 820, BRAKE: 1100, VMAX: 1800, RMAX: 520, MU: 2.6, BOOST: 1500, DQ: 0.00026, WHEELIE: 1.0, AIR_ROT: 19, WMAX: 13,
       zoom: 1.0, engine: 'v8', glow: '#ff2e97', paint: { a: '#ffb02e', b: '#c2410c' },
       pts: [[112, -18], [112, -34], [34, -68], [-40, -68], [-110, -34], [-108, -14], [66, -50], [-70, -46]], roof: { 2: 1, 3: 1 },
       exhaust: [-114, -12], far: true
     },
     civic: {
       key: 'civic', name: 'CIVIC TYPE R', WR: 24, WB: 70, R: 54, K: 78, C: 13, KH: 520, INV_I: 1 / 2300,
-      P: 900, BRAKE: 1500, VMAX: 1950, RMAX: 520, MU: 3.2, BOOST: 1550, DQ: 0.00023, WHEELIE: 0.5, AIR_ROT: 8.5, WMAX: 8,
+      P: 900, BRAKE: 1500, VMAX: 1950, RMAX: 520, MU: 3.2, BOOST: 1550, DQ: 0.00023, WHEELIE: 0.5, AIR_ROT: 18, WMAX: 12.5,
       zoom: 1.12, engine: 'vtec', glow: '#39ff14', paint: { a: '#3dff7e', b: '#087a35' },
       pts: [[95, 14], [88, 0], [18, -26], [-58, -28], [-90, -6], [-92, 14], [56, -8], [-76, -22]], roof: { 2: 1, 3: 1 },
       exhaust: [-98, 26], far: true
     },
     truck: {
       key: 'truck', name: 'CAMION', WR: 34, WB: 128, R: 84, K: 58, C: 12, KH: 480, INV_I: 1 / 9500,
-      P: 760, BRAKE: 950, VMAX: 1550, RMAX: 440, MU: 2.8, BOOST: 1250, DQ: 0.00029, WHEELIE: 0.15, AIR_ROT: 3.6, WMAX: 4.5,
+      P: 760, BRAKE: 950, VMAX: 1550, RMAX: 440, MU: 2.8, BOOST: 1250, DQ: 0.00029, WHEELIE: 0.15, AIR_ROT: 8, WMAX: 7.5,
       zoom: 0.78, engine: 'diesel', glow: '#ffe14d', paint: { a: '#ff4fae', b: '#7a1fd1' },
       pts: [[172, -26], [150, -78], [112, -104], [40, -112], [-150, -112], [-176, -60], [-176, -24]], roof: { 2: 1, 3: 1, 4: 1 },
       exhaust: [70, -112], far: true
