@@ -38,7 +38,7 @@
 
   // ---------------------------------------------------------------- canvas / état global
   var cv = document.getElementById('c'), g = cv.getContext('2d');
-  var W = 0, H = 0, DPR = 1, DPR_CAP = 2, slowFrames = 0;
+  var W = 0, H = 0, DPR = 1, DPR_CAP = 1.5, slowFrames = 0, perfAcc = 0, perfN = 0;
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, DPR_CAP);
     W = window.innerWidth; H = window.innerHeight;
@@ -55,6 +55,7 @@
     var remap = function (o) { var n = {}; Object.keys(o).forEach(function (k) { var id = +k; if (id >= 1 && id <= 20) n[Math.floor((id - 1) / 5) * 10 + (id - 1) % 5 + 1] = o[k]; }); return n; };
     save.stars = remap(save.stars); save.best = remap(save.best); save.skip = remap(save.skip); save.v3 = true;
   }
+  if (save.q > 0) DPR_CAP = Math.max(0.75, Math.min(1.5, save.q)); resize();
   ['flips', 'crush', 'rings', 'booms', 'coins', 'daily', 'maxMult', 'bestAir'].forEach(function (k) { save.tot[k] = save.tot[k] || 0; });
   function upgOf(vk) { if (!save.upg[vk]) save.upg[vk] = { eng: 0, sus: 0, grip: 0, nit: 0 }; return save.upg[vk]; }
   var UPG = [
@@ -536,7 +537,7 @@
     updateParts(dt);
     updateCamera(dt);
     S.shake *= Math.exp(-dt * 6);
-    if (!S.dead) updateEngine(inp);
+    if (!S.dead) updateEngine(inp, dt);
   }
 
   function updatePieces(dt) {
@@ -596,19 +597,54 @@
     }
   }
 
-  function updateEngine(inp) {
-    var car = S.car;
-    var thr = inp.gas ? 1 : 0;
+  // ---- moteur : boîte de vitesses + rupteur, par véhicule
+  // idle/red/lim : ralenti, zone rouge, rupteur (tr/min) · dial : graduation max du compte-tours (×1000)
+  // k : vivacité de la montée en régime · hold : temps passé sur le rupteur avant de passer le rapport · cut : durée de coupure
+  var ENG = {
+    v8:     { idle: 900,  red: 6000, lim: 6500, dial: 8,  gears: 5, k: 8,  hold: 0.06, cut: 0.06,  drop: 350 },
+    vtec:   { idle: 1000, red: 9000, lim: 9600, dial: 11, gears: 6, k: 17, hold: 0.34, cut: 0.045, drop: 520, vtec: 5800 },
+    bike:   { idle: 1400, red: 13000, lim: 13800, dial: 16, gears: 6, k: 20, hold: 0.14, cut: 0.04, drop: 700 },
+    diesel: { idle: 650,  red: 2100, lim: 2300, dial: 3,  gears: 8, k: 3.5, hold: 0.05, cut: 0.09, drop: 160 }
+  };
+  function updateEngine(inp, dt) {
+    var car = S.car, E = ENG[V.engine] || ENG.v8;
+    var thr = inp.gas ? 1 : 0, n = E.gears;
+    if (car.gear == null) { car.gear = 0; car.cutT = 0; car.holdT = 0; car.limT = 9; }
     var sp = car.grounded ? Math.abs(car.gspeed) : Math.abs(car.vx) * 0.6;
-    var gears = [0, 0.2 * VMAX, 0.4 * VMAX, 0.6 * VMAX, 0.8 * VMAX, 1.05 * VMAX], gi = 0;
-    while (gi < 4 && sp > gears[gi + 1]) gi++;
-    var frac = clamp((sp - gears[gi]) / (gears[gi + 1] - gears[gi]), 0, 1);
-    var top = V.engine === 'bike' ? 9500 : V.engine === 'vtec' ? 8400 : V.engine === 'diesel' ? 2600 : 6000;
-    var idle = V.engine === 'diesel' ? 700 : 1100;
-    var target = car.grounded ? idle + frac * (top - idle - 900) + thr * 400 : (thr ? top : idle + 400);
-    if (car.boosting) target += 600;
-    car.rpm += (target - car.rpm) * 0.12;
-    if (state === 'play') SND.engine(car.rpm, thr, car.boosting, V.engine);
+    var gTop = function (gi) { return VMAX * 1.08 * Math.pow((gi + 1) / n, 0.8); };
+    var wheelRpm = E.idle * 0.6 + (E.lim - E.idle * 0.6) * sp / gTop(car.gear);
+    var target;
+    if (car.grounded) {
+      var slip = thr ? (car.gear === 0 ? 0.5 : 0.12) * (E.lim - E.idle) : 0;          // embrayage qui patine au départ
+      target = Math.max(wheelRpm, E.idle + slip) + (thr ? E.lim * 0.06 : 0);
+      if (wheelRpm >= E.lim * 0.985 && thr) {                                          // sur le rupteur : on tient avant de passer
+        car.holdT += dt;
+        if (car.holdT > E.hold && car.gear < n - 1) { car.gear++; car.holdT = 0; car.rpm *= gTop(car.gear - 1) / gTop(car.gear); car.cutT = 0; }
+      } else car.holdT = 0;
+      if (car.gear > 0 && wheelRpm * gTop(car.gear) / gTop(car.gear - 1) < E.red * 0.72) car.gear--;   // rétrograde
+    } else target = thr ? E.lim * 1.08 : E.idle + 300;                                // en l'air : les roues tournent dans le vide
+    if (car.cutT > 0) {                                                                // coupure d'injection : le régime chute
+      car.cutT -= dt;
+      car.rpm += (E.lim - E.drop - car.rpm) * (1 - Math.exp(-dt * 45));
+    } else {
+      car.rpm += (target - car.rpm) * (1 - Math.exp(-dt * (thr ? E.k : E.k * 0.6)));
+      if (car.rpm >= E.lim) {
+        car.rpm = E.lim;
+        if (thr) { car.cutT = E.cut; car.limT = 0; limiterPop(E); }
+      }
+    }
+    car.rpm = Math.max(E.idle * 0.8, car.rpm);
+    car.limT += dt;
+    if (state === 'play') SND.engine(car.rpm, thr, car.boosting, V.engine, car.cutT > 0);
+  }
+  // pétarade à l'échappement sur le rupteur
+  function limiterPop(E) {
+    var car = S.car;
+    if (V.engine === 'diesel' || Math.random() > (V.engine === 'vtec' ? 0.75 : 0.45)) return;
+    var ca = Math.cos(car.a), sa = Math.sin(car.a);
+    var ex = car.x + V.exhaust[0] * ca - V.exhaust[1] * sa, ey = car.y + V.exhaust[0] * sa + V.exhaust[1] * ca;
+    for (var f = 0; f < 3; f++) spawn(ex, ey, -ca * rnd(250, 520) + car.vx * 0.6, -sa * rnd(250, 520) + car.vy * 0.6 + rnd(-40, 40), rnd(0.06, 0.14), rnd(5, 10), f ? '#ffb020' : '#ffe2a0', 0, true);
+    SND.pop();
   }
 
   function effects(dt, inp) {
@@ -819,12 +855,15 @@
   }
   function valleyLights(cam, par, yFrac, t) {
     var ox = cam.x * par * cam.s, base = H * yFrac;
+    var P = 2600;   // motif répété en coordonnées monde (stable quand la couche est redessinée)
     for (var i = 0; i < 160; i++) {
-      var x = ((hash(i) * W * 2 - ox) % (W * 2) + W * 2) % (W * 2) - W * 0.2;
+      var x0 = ((hash(i) * P - ox) % P + P) % P - 20;
       var y = base - hash(i + 40) * H * 0.05;
       var a = 0.35 + 0.5 * Math.abs(Math.sin(t * 0.7 + i));
-      g.drawImage(soft(hash(i + 3) > 0.5 ? '#ffd28a' : '#cfe0ff'), x - 4, y - 4, 8, 8);
-      g.fillStyle = 'rgba(255,240,210,' + a + ')'; g.fillRect(x - 0.6, y - 0.6, 1.4, 1.4);
+      for (var x = x0; x < W + 20; x += P) {
+        g.drawImage(soft(hash(i + 3) > 0.5 ? '#ffd28a' : '#cfe0ff'), x - 4, y - 4, 8, 8);
+        g.fillStyle = 'rgba(255,240,210,' + a + ')'; g.fillRect(x - 0.6, y - 0.6, 1.4, 1.4);
+      }
     }
   }
   function pines(cam, par, yFrac, col) {
@@ -882,45 +921,112 @@
     }
   }
 
-  function drawBackdrop(def, cam, t) {
-    var sc = scn(def), th = def.theme, hz = sc.haze;
-    drawSky(sc, cam, t);
-    if (th === 'beach') {
-      ridge(cam, 0.02, 0.6, 0.035, sc.far, 1, false, hz, 0.7);
-      decoSkyline(cam, 0.05, 0.6, false);
-      var hy = H * 0.6;
-      var sea = g.createLinearGradient(0, hy, 0, H);
-      sea.addColorStop(0, '#8a7aa0'); sea.addColorStop(0.12, '#3f5d87'); sea.addColorStop(1, '#10284a');
-      g.fillStyle = sea; g.fillRect(0, hy, W, H - hy);
-      var sxr = W * sc.sun.x - cam.x * 0.01 * cam.s;
-      for (var i = 0; i < 60; i++) {
-        var yy = hy + 3 + Math.pow(i / 60, 1.6) * (H - hy) * 0.8, ww = (8 + i * 1.6) * (0.5 + hash(i + Math.floor(t * 3)) * 0.8);
-        g.fillStyle = 'rgba(255,214,160,' + (0.5 * (1 - i / 60)) + ')';
-        g.fillRect(sxr - ww / 2 + (hash(i * 7 + Math.floor(t * 4)) - 0.5) * 30, yy, ww, 1.6);
-      }
-      g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 1;
-      for (var j = 0; j < 12; j++) { var wy = hy + 10 + j * j * 2.4; g.beginPath(); for (var x = 0; x <= W; x += 30) g.lineTo(x, wy + Math.sin(x * 0.02 + t + j) * 1.5); g.stroke(); }
-      var pox = cam.x * 0.22 * cam.s;
-      for (var p = -1; p < W / 230 + 2; p++) { var idx = Math.floor((p * 230 + pox) / 230); if (hash(idx * 1.9) < 0.35) continue; drawPalm(p * 230 - (pox % 230) + hash(idx) * 90, H * 0.8, 0.85 + hash(idx + 4) * 0.5, '#1d1830', idx); }
-    } else if (th === 'junk') {
-      ridge(cam, 0.03, 0.62, 0.1, sc.far, 1, false, hz, 0.6);
-      junkPiles(cam, 0.08, 0.7, '#221f33', 'rgba(255,170,130,0.35)');
-      junkPiles(cam, 0.16, 0.8, '#141320', 'rgba(255,150,110,0.25)');
-    } else if (th === 'touge') {
-      ridge(cam, 0.02, 0.6, 0.22, sc.far, 1, false, hz, 0.45);
-      valleyLights(cam, 0.04, 0.68, t);
-      ridge(cam, 0.07, 0.72, 0.16, '#0d1426', 1.3, false, hz, 0.35);
-      pines(cam, 0.16, 0.8, '#070b16');
-    } else {
-      ridge(cam, 0.03, 0.64, 0.24, sc.far, 1, true, hz, 0.75);
-      ridge(cam, 0.08, 0.72, 0.16, sc.mid, 1.2, true, hz, 0.45);
-      saguaros(cam, 0.2, 0.82, '#3a2420');
-      g.fillStyle = '#3a2420'; g.fillRect(0, H * 0.82, W, H);
+  // ---- caches de décor : les couches lointaines sont rendues une fois dans des canevas hors écran,
+  // puis simplement décalées (parallaxe) ; on ne les redessine que lorsqu'elles ont trop glissé.
+  var BG = { key: '', layers: {} }, BG_M = 320;
+  function bgRes() { return Math.min(DPR, 1.25); }
+  function withCtx(ctx, w, fn) {     // exécute fn en dessinant dans ctx, avec une largeur logique w
+    var og = g, oW = W; g = ctx; W = w;
+    try { fn(); } finally { g = og; W = oW; }
+  }
+  function staticLayer(name, key, fn, op) {   // couche fixe à l'écran (ciel, mer, voiles)
+    var L = BG.layers[name];
+    if (!L || L.key !== key) {
+      var r = bgRes(), c = (L && L.c) || mkCanvas(1, 1);
+      c.width = Math.ceil(W * r); c.height = Math.ceil(H * r);
+      var x = c.getContext('2d'); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, W, H);
+      withCtx(x, W, fn);
+      L = BG.layers[name] = { c: c, key: key };
     }
-    // voile de brume à l'horizon
+    if (op) g.globalCompositeOperation = op;
+    g.drawImage(L.c, 0, 0, W, H);
+    if (op) g.globalCompositeOperation = 'source-over';
+  }
+  function parLayer(name, key, par, cam, fn) {   // couche en parallaxe : fn(fakeCam) dessine pour un décalage donné
+    var ox = cam.x * par * cam.s, L = BG.layers[name];
+    if (!L || L.key !== key || Math.abs(ox - L.ox) > BG_M * 0.85) {
+      var r = bgRes(), c = (L && L.c) || mkCanvas(1, 1), w = W + BG_M * 2;
+      c.width = Math.ceil(w * r); c.height = Math.ceil(H * r);
+      var x = c.getContext('2d'); x.setTransform(r, 0, 0, r, 0, 0); x.clearRect(0, 0, w, H);
+      var ox0 = ox - BG_M;
+      withCtx(x, w, function () { fn({ x: ox0 / par, s: 1 }); });
+      L = BG.layers[name] = { c: c, key: key, ox: ox };
+    }
+    var rr = L.c.width / (W + BG_M * 2);   // on ne copie que la partie visible
+    g.drawImage(L.c, (BG_M - (L.ox - ox)) * rr, 0, W * rr, L.c.height, 0, 0, W, H);
+  }
+
+  function hazeVeil(hz) {   // voile de brume à l'horizon (uniforme horizontalement : on peut le cuire dans une couche)
     var hzG = g.createLinearGradient(0, H * 0.5, 0, H * 0.9);
     hzG.addColorStop(0, 'rgba(' + hz + ',0)'); hzG.addColorStop(0.6, 'rgba(' + hz + ',0.12)'); hzG.addColorStop(1, 'rgba(' + hz + ',0)');
     g.fillStyle = hzG; g.fillRect(0, H * 0.5, W, H * 0.4);
+  }
+  function drawBackdrop(def, cam, t) {
+    var sc = scn(def), th = def.theme, hz = sc.haze;
+    var key = th + '|' + W + 'x' + H + '|' + bgRes();
+    staticLayer('sky', key, function () {
+      var gr = g.createLinearGradient(0, 0, 0, H);
+      sc.sky.forEach(function (s) { gr.addColorStop(s[0], s[1]); });
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      stars(120, 0.6, sc.stars);
+      var r = Math.min(W, H);
+      if (sc.sun) {
+        var sx = W * sc.sun.x, sy = H * sc.sun.y, sr = r * sc.sun.r, gl = sc.sun.glow;
+        var halo = g.createRadialGradient(sx, sy, sr * 0.5, sx, sy, sr * 9);
+        halo.addColorStop(0, 'rgba(' + gl + ',0.55)'); halo.addColorStop(0.25, 'rgba(' + gl + ',0.18)'); halo.addColorStop(1, 'rgba(' + gl + ',0)');
+        g.fillStyle = halo; g.fillRect(0, 0, W, H);
+        var disc = g.createRadialGradient(sx, sy - sr * 0.2, sr * 0.1, sx, sy, sr);
+        disc.addColorStop(0, '#ffffff'); disc.addColorStop(0.6, sc.sun.c); disc.addColorStop(1, 'rgba(' + gl + ',0.9)');
+        g.fillStyle = disc; g.beginPath(); g.arc(sx, sy, sr, 0, TAU); g.fill();
+      }
+      if (sc.moon) {
+        var mx = W * sc.moon.x, my = H * sc.moon.y, mr = r * sc.moon.r;
+        var mh = g.createRadialGradient(mx, my, mr, mx, my, mr * 7); mh.addColorStop(0, 'rgba(190,205,255,0.32)'); mh.addColorStop(1, 'rgba(190,205,255,0)');
+        g.fillStyle = mh; g.fillRect(0, 0, W, H);
+        var md = g.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+        md.addColorStop(0, '#fbfbf5'); md.addColorStop(1, '#c9ccd6');
+        g.fillStyle = md; g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(120,125,140,0.25)';
+        [[0.3, -0.2, 0.22], [-0.25, 0.25, 0.16], [0.1, 0.4, 0.12]].forEach(function (c) { g.beginPath(); g.arc(mx + c[0] * mr, my + c[1] * mr, c[2] * mr, 0, TAU); g.fill(); });
+      }
+      if (th === 'beach') {          // mer (fixe à l'écran)
+        var hy = H * 0.6, sea = g.createLinearGradient(0, hy, 0, H);
+        sea.addColorStop(0, '#8a7aa0'); sea.addColorStop(0.12, '#3f5d87'); sea.addColorStop(1, '#10284a');
+        g.fillStyle = sea; g.fillRect(0, hy, W, H - hy);
+      }
+    });
+    // nuages (5 images, animés)
+    var cs = cloudSprite(sc.cloud[0] + sc.cloud[1], sc.cloud[0], sc.cloud[1]);
+    g.globalAlpha = 0.75;
+    for (var i = 0; i < 5; i++) {
+      var cw = W * (0.35 + hash(i + 2) * 0.3), chh = cw * 0.32;
+      var cx = ((hash(i) * W * 1.6 - cam.x * 0.012 * cam.s - t * (3 + i)) % (W * 1.6) + W * 1.6) % (W * 1.6) - cw * 0.5;
+      g.drawImage(cs, cx, H * (0.08 + hash(i + 7) * 0.28), cw, chh);
+    }
+    g.globalAlpha = 1;
+    if (th === 'beach') {
+      parLayer('b1', key, 0.04, cam, function (fc) { ridge(fc, 0.04, 0.6, 0.035, sc.far, 1, false, hz, 0.7); decoSkyline(fc, 0.04, 0.6, false); });
+      var hy = H * 0.6, sxr = W * sc.sun.x;
+      for (var k = 0; k < 40; k++) {    // reflet du soleil qui scintille
+        var yy = hy + 3 + Math.pow(k / 40, 1.6) * (H - hy) * 0.8, ww = (8 + k * 2.4) * (0.5 + hash(k + Math.floor(t * 3)) * 0.8);
+        g.fillStyle = 'rgba(255,214,160,' + (0.5 * (1 - k / 40)) + ')';
+        g.fillRect(sxr - ww / 2 + (hash(k * 7 + Math.floor(t * 4)) - 0.5) * 30, yy, ww, 1.6);
+      }
+      parLayer('b2', key, 0.22, cam, function (fc) {
+        var pox = fc.x * 0.22;
+        for (var p = -1; p < W / 230 + 2; p++) { var idx = Math.floor((p * 230 + pox) / 230); if (hash(idx * 1.9) < 0.35) continue; drawPalm(p * 230 - (pox % 230) + hash(idx) * 90, H * 0.8, 0.85 + hash(idx + 4) * 0.5, '#1d1830', idx); }
+        hazeVeil(hz);
+      });
+    } else if (th === 'junk') {
+      parLayer('j1', key, 0.05, cam, function (fc) { ridge(fc, 0.05, 0.62, 0.1, sc.far, 1, false, hz, 0.6); junkPiles(fc, 0.05, 0.7, '#221f33', 'rgba(255,170,130,0.35)'); });
+      parLayer('j2', key, 0.16, cam, function (fc) { junkPiles(fc, 0.16, 0.8, '#141320', 'rgba(255,150,110,0.25)'); hazeVeil(hz); });
+    } else if (th === 'touge') {
+      parLayer('t1', key, 0.04, cam, function (fc) { ridge(fc, 0.03, 0.6, 0.22, sc.far, 1, false, hz, 0.45); valleyLights(fc, 0.04, 0.68, 0); ridge(fc, 0.05, 0.72, 0.16, '#0d1426', 1.3, false, hz, 0.35); });
+      parLayer('t3', key, 0.16, cam, function (fc) { pines(fc, 0.16, 0.8, '#070b16'); hazeVeil(hz); });
+    } else {
+      parLayer('d1', key, 0.05, cam, function (fc) { ridge(fc, 0.03, 0.64, 0.24, sc.far, 1, true, hz, 0.75); ridge(fc, 0.06, 0.72, 0.16, sc.mid, 1.2, true, hz, 0.45); });
+      parLayer('d3', key, 0.2, cam, function (fc) { saguaros(fc, 0.2, 0.82, '#3a2420'); g.fillStyle = '#3a2420'; g.fillRect(0, H * 0.82, W, H); hazeVeil(hz); });
+    }
   }
 
   // ---------------------------------------------------------------- rendu : monde
@@ -972,9 +1078,7 @@
     for (i = i1; i >= i0; i--) g.lineTo(i * STEP, T.H[i]);
     g.closePath();
     g.fillStyle = pat(sc.top); g.fill();
-    var bg = g.createLinearGradient(0, -DB, 0, 0);
-    g.fillStyle = 'rgba(' + sc.haze + ',0.10)'; g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.22)'; g.fill();
+    g.fillStyle = 'rgba(' + Math.round(sc.haze[0] * 0.26) + ',' + Math.round(sc.haze[1] * 0.26) + ',' + Math.round(sc.haze[2] * 0.26) + ',0.3)'; g.fill();
     if (def.theme === 'touge') {     // marquage routier
       g.strokeStyle = 'rgba(240,240,230,0.75)'; g.lineWidth = 2.5; g.setLineDash([34, 30]);
       g.beginPath(); terrainPath(T, i0, i1, -DB * 0.5); g.stroke(); g.setLineDash([]);
@@ -989,10 +1093,8 @@
     var gr = g.createLinearGradient(0, vb - 900, 0, vb + 400);
     gr.addColorStop(0, 'rgba(0,0,0,0.05)'); gr.addColorStop(1, 'rgba(0,0,0,0.6)');
     g.fillStyle = gr; g.fill();
-    // ombre portée sous la lèvre (occlusion)
-    g.save(); g.clip();
+    // ombre portée sous la lèvre (occlusion) ; la moitié haute est recouverte par la bande avant
     g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 26; g.beginPath(); terrainPath(T, i0, i1, DF + 6); g.stroke();
-    g.restore();
     // dessus de la piste (bande avant)
     g.beginPath();
     for (i = i0; i <= i1; i++) g.lineTo(i * STEP, T.H[i]);
@@ -1373,19 +1475,20 @@
       g.quadraticCurveTo(sx + w * 0.15, H - hh * 1.2, sx + w * 0.45, H - hh);
       g.quadraticCurveTo(sx + w * 0.85, H - hh * 0.5, sx + w, H + 4); g.fill();
     }
-    // étalonnage couleur + rayons de soleil + vignettage
-    g.fillStyle = sc.grade; g.fillRect(0, 0, W, H);
-    if (sc.sun) {
-      g.globalCompositeOperation = 'lighter';
-      var sxp = W * sc.sun.x - cam.x * 0.01 * cam.s, syp = H * sc.sun.y, gl = sc.sun.glow;
-      var fl = g.createRadialGradient(sxp, syp, 0, sxp, syp, Math.max(W, H) * 0.7);
-      fl.addColorStop(0, 'rgba(' + gl + ',0.16)'); fl.addColorStop(1, 'rgba(' + gl + ',0)');
-      g.fillStyle = fl; g.fillRect(0, 0, W, H);
-      g.globalCompositeOperation = 'source-over';
-    }
-    var vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    // étalonnage couleur + halo du soleil + vignettage, pré-calculés
+    var key = def.theme + '|' + W + 'x' + H + '|' + bgRes();
+    staticLayer('grade', key, function () {
+      if (sc.sun) {
+        var sxp = W * sc.sun.x, syp = H * sc.sun.y, gl = sc.sun.glow;
+        var fl = g.createRadialGradient(sxp, syp, 0, sxp, syp, Math.max(W, H) * 0.7);
+        fl.addColorStop(0, 'rgba(' + gl + ',0.13)'); fl.addColorStop(1, 'rgba(' + gl + ',0)');
+        g.fillStyle = fl; g.fillRect(0, 0, W, H);
+      }
+      g.fillStyle = sc.grade; g.fillRect(0, 0, W, H);
+      var vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.42, W / 2, H / 2, Math.max(W, H) * 0.78);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+      g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    });
   }
 
   function drawWorld(t) {
@@ -1397,16 +1500,19 @@
     g.translate(ax + sx, ay + sy); g.scale(s, s); g.translate(-cam.x, -cam.y);
     var vl = cam.x - ax / s - 60, vr = cam.x + (W - ax) / s + 60, vb = cam.y + (H - ay) / s;
     drawTerrain(def, T, vl, vr, vb);
+   
     drawProps(def, T, vl, vr, false, t);
     drawPads(T, vl, vr, t);
     drawSprings(T, vl, vr, t);
     drawFlags(T, vl, vr, t);
+   
     for (var i = 0; i < T.cars.length; i++) { var o = T.cars[i]; if (o.x + o.w > vl && o.x - o.w < vr) drawObstacle(o, T); }
     drawCoins(T, vl, vr, t);
     drawNitros(T, vl, vr, t);
     drawRings(T, vl, vr, t, false);
     drawParts(false);
     drawGhost(t);
+   
     if (!S.dead) {
       var cgh = getH(S.car.x), calt = Math.max(0, cgh - S.car.y), sw = V.WB + 70;
       g.save(); g.translate(S.car.x, cgh + 10); g.rotate(Math.atan2(getH(S.car.x + 30) - getH(S.car.x - 30), 60));
@@ -1415,9 +1521,11 @@
       g.scale(1, 0.14); g.fillStyle = sh; g.beginPath(); g.arc(0, 0, sw, 0, TAU); g.fill(); g.restore();
       VX.drawVehicle(g, S.car, save.color, S.car.boosting, t, CAR_COLORS);
     } else drawPieces();
+   
     drawRings(T, vl, vr, t, true);
     drawProps(def, T, vl, vr, true, t);
     drawParts(true);
+   
     if (S.ring) {
       var rr = S.ring.t * 900, ra = 1 - S.ring.t / 0.8;
       g.strokeStyle = 'rgba(255,230,190,' + ra * 0.6 + ')'; g.lineWidth = 10 * ra + 2;
@@ -1425,7 +1533,9 @@
     }
     g.restore();
     drawForeground(def, cam);
+   
     drawHud(t);
+   
     if (S.flash > 0) { g.fillStyle = 'rgba(255,236,210,' + S.flash * 0.85 + ')'; g.fillRect(0, 0, W, H); }
   }
 
@@ -1433,9 +1543,8 @@
   function txt(str, x, y, size, col, align, weight) {
     g.font = (weight || '700') + ' ' + size + 'px ' + FONT;
     g.textAlign = align || 'left'; g.textBaseline = 'middle';
-    g.shadowColor = 'rgba(0,0,0,0.65)'; g.shadowBlur = 6; g.shadowOffsetY = 1.5;
+    g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillText(str, x + 0.5, y + 1.5);   // ombre portée simple (pas de flou : coûteux)
     g.fillStyle = col || '#fff'; g.fillText(str, x, y);
-    g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
   }
   function panel(x, y, w, h, r) {
     g.fillStyle = 'rgba(10,12,18,0.55)';
@@ -1484,13 +1593,9 @@
     g.fillStyle = ACC; g.fillRect(px0, py0, pw * prog, 4 * u);
     g.fillStyle = '#fff'; g.beginPath(); g.arc(px0 + pw * prog, py0 + 2 * u, 6 * u, 0, TAU); g.fill();
     txt(S.def.name, W / 2, py0 + 22 * u, 14 * u, 'rgba(255,255,255,0.85)', 'center', '700 italic');
-    // vitesse + temps
-    var kmh = Math.round(Math.hypot(car.vx, car.vy) * 0.12);
+    // compte-tours + vitesse + rapport + temps
     var sy0 = Math.max(70, m + 62);
-    panel(W - m - 128 * u, sy0 - 4 * u, 128 * u, 58 * u, 8);
-    txt(String(kmh), W - m - 46 * u, sy0 + 18 * u, 30 * u, '#fff', 'right', '800 italic');
-    txt('KM/H', W - m - 12 * u, sy0 + 22 * u, 11 * u, 'rgba(255,255,255,0.6)', 'right', '700');
-    txt(S.t.toFixed(1) + ' s', W - m - 12 * u, sy0 + 42 * u, 12 * u, 'rgba(255,255,255,0.75)', 'right', '700');
+    drawTacho(W - m - 196 * u, sy0 - 4 * u, u, car, t);
     if (S.banner) {
       var b = S.banner, k = Math.min(1, b.t * 6), a = b.t > 1.2 ? 1 - (b.t - 1.2) / 0.4 : 1;
       g.globalAlpha = Math.max(0, a);
@@ -1537,13 +1642,91 @@
     g.save(); g.translate(px, py); g.scale(scl, scl);
     VX.drawVehicle(g, car, save.color, false, t, CAR_COLORS);
     g.restore();
-    g.fillStyle = sc.grade; g.fillRect(0, 0, W, H);
-    // assombrit la gauche pour la lisibilité des menus
-    var lg = g.createLinearGradient(0, 0, W * 0.6, 0); lg.addColorStop(0, 'rgba(6,8,14,0.78)'); lg.addColorStop(1, 'rgba(6,8,14,0)');
-    g.fillStyle = lg; g.fillRect(0, 0, W, H);
-    var vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.8);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    staticLayer('menuveil', theme + '|' + W + 'x' + H + '|' + bgRes(), function () {
+      g.fillStyle = sc.grade; g.fillRect(0, 0, W, H);
+      // assombrit la gauche pour la lisibilité des menus
+      var lg = g.createLinearGradient(0, 0, W * 0.6, 0); lg.addColorStop(0, 'rgba(6,8,14,0.78)'); lg.addColorStop(1, 'rgba(6,8,14,0)');
+      g.fillStyle = lg; g.fillRect(0, 0, W, H);
+      var vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.4, W / 2, H / 2, Math.max(W, H) * 0.8);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+      g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    });
+  }
+
+  // ---- compte-tours : cadran statique pré-rendu + aiguille, diodes de passage, rupteur
+  var TACH = { key: '', c: null };
+  var T_A0 = Math.PI * 0.75, T_SW = Math.PI * 1.5;
+  function tachAng(rpm, E) { return T_A0 + T_SW * clamp(rpm / (E.dial * 1000), 0, 1); }
+  function tachFace(E, u, R) {
+    var key = V.engine + '|' + u + '|' + DPR;
+    if (TACH.key === key) return TACH.c;
+    var sz = Math.ceil((R * 2 + 8) * DPR), c = TACH.c || mkCanvas(1, 1); c.width = sz; c.height = sz;
+    var x = c.getContext('2d'); x.setTransform(DPR, 0, 0, DPR, (R + 4) * DPR, (R + 4) * DPR);
+    var fg = x.createRadialGradient(0, -R * 0.3, R * 0.1, 0, 0, R);
+    fg.addColorStop(0, '#22262e'); fg.addColorStop(1, '#0a0b0e');
+    x.fillStyle = fg; x.beginPath(); x.arc(0, 0, R, 0, TAU); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.22)'; x.lineWidth = 1.5; x.beginPath(); x.arc(0, 0, R - 0.75, 0, TAU); x.stroke();
+    // zone rouge
+    x.strokeStyle = '#e8403a'; x.lineWidth = R * 0.1;
+    x.beginPath(); x.arc(0, 0, R * 0.86, tachAng(E.red, E), tachAng(E.dial * 1000, E)); x.stroke();
+    // graduations
+    var step = E.dial > 12 ? 2 : 1, major = E.dial * 1000, sub = E.dial <= 3 ? 250 : 500;
+    for (var r = 0; r <= major + 1; r += sub) {
+      var an = tachAng(r, E), isMaj = r % 1000 === 0, ca = Math.cos(an), sa = Math.sin(an);
+      var r0 = R * (isMaj ? 0.72 : 0.8), r1 = R * 0.92;
+      x.strokeStyle = r >= E.red ? '#ff7a6a' : 'rgba(255,255,255,0.85)'; x.lineWidth = isMaj ? 2 : 1;
+      x.beginPath(); x.moveTo(ca * r0, sa * r0); x.lineTo(ca * r1, sa * r1); x.stroke();
+      if (isMaj && (r / 1000) % step === 0) {
+        x.fillStyle = r >= E.red ? '#ff8a7a' : '#e9ecf1';
+        x.font = '700 italic ' + Math.round(R * 0.2) + 'px ' + FONT; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText(String(r / 1000), ca * R * 0.56, sa * R * 0.56);
+      }
+    }
+    x.fillStyle = 'rgba(255,255,255,0.45)'; x.font = '700 ' + Math.round(R * 0.11) + 'px ' + FONT; x.textAlign = 'center';
+    x.fillText('×1000 TR/MIN', 0, R * 0.86);
+    TACH.key = key; TACH.c = c;
+    return c;
+  }
+  function drawTacho(x0, y0, u, car, t) {
+    var E = ENG[V.engine] || ENG.v8, R = Math.round(56 * u), PW = 196 * u;
+    var cx = x0 + PW - R - 10 * u, cy = y0 + 22 * u + R;
+    panel(x0, y0, PW, R * 2 + 30 * u, 10);
+    // diodes de passage de rapport (clignotent en bleu sur le rupteur)
+    var rpm = car.rpm, onLim = car.limT < 0.14, nL = 11, lw = (PW - 24 * u) / nL;
+    for (var i = 0; i < nL; i++) {
+      var th = E.red * (0.68 + 0.32 * i / (nL - 1)), lit = rpm >= th;
+      var col = i < 5 ? '#3ddc6a' : i < 8 ? '#ffc23a' : '#ff3b30';
+      if (onLim) { lit = Math.floor(t * 24) % 2 === 0; col = '#5aa8ff'; }
+      g.fillStyle = lit ? col : 'rgba(255,255,255,0.1)';
+      g.beginPath(); g.arc(x0 + 12 * u + lw * (i + 0.5), y0 + 10 * u, 2.8 * u, 0, TAU); g.fill();
+    }
+    g.drawImage(tachFace(E, u, R), cx - R - 4, cy - R - 4, R * 2 + 8, R * 2 + 8);
+    // arc lumineux jusqu'au régime
+    g.strokeStyle = rpm >= E.red ? 'rgba(255,80,60,0.95)' : 'rgba(255,138,43,0.9)'; g.lineWidth = 2.5 * u;
+    g.beginPath(); g.arc(cx, cy, R * 0.97, T_A0, tachAng(rpm, E)); g.stroke();
+    // aiguille
+    g.save(); g.translate(cx, cy); g.rotate(tachAng(rpm, E));
+    g.fillStyle = '#ff5a2e'; g.beginPath(); g.moveTo(-R * 0.14, -2.2 * u); g.lineTo(R * 0.9, -0.8 * u); g.lineTo(R * 0.9, 0.8 * u); g.lineTo(-R * 0.14, 2.2 * u); g.fill();
+    g.restore();
+    g.fillStyle = '#2a2d33'; g.beginPath(); g.arc(cx, cy, R * 0.1, 0, TAU); g.fill();
+    // rapport engagé
+    txt(String((car.gear || 0) + 1), cx, cy + R * 0.34, R * 0.32, onLim ? '#ff5a4a' : '#fff', 'center', '800 italic');
+    if (car.limT < 0.3) {
+      g.globalAlpha = Math.floor(t * 16) % 2 ? 1 : 0.35;
+      txt('RUPTEUR', cx, cy + R * 0.62, 10 * u, '#ff5a4a', 'center', '800 italic');
+      g.globalAlpha = 1;
+    }
+    // colonne de gauche : vitesse, VTEC, chrono
+    var lx = x0 + 12 * u, kmh = Math.round(Math.hypot(car.vx, car.vy) * 0.12);
+    txt(String(kmh), lx, cy - R * 0.42, 26 * u, '#fff', 'left', '800 italic');
+    txt('KM/H', lx + 1, cy - R * 0.42 + 18 * u, 10 * u, 'rgba(255,255,255,0.6)', 'left', '700');
+    if (E.vtec) {
+      var vOn = rpm >= E.vtec;
+      g.fillStyle = vOn ? 'rgba(235,40,40,0.95)' : 'rgba(255,255,255,0.08)';
+      g.fillRect(lx, cy + R * 0.12, 34 * u, 14 * u);
+      txt('VTEC', lx + 17 * u, cy + R * 0.12 + 7.2 * u, 10 * u, vOn ? '#fff' : 'rgba(255,255,255,0.35)', 'center', '800 italic');
+    }
+    txt(S.t.toFixed(1) + ' s', lx, cy + R * 0.82, 12 * u, 'rgba(255,255,255,0.75)', 'left', '700');
   }
 
   // ---------------------------------------------------------------- boucle
@@ -1551,9 +1734,13 @@
   function frame(now) {
     requestAnimationFrame(frame);
     var rawDt = (now - last) / 1000, dt = Math.min(0.05, rawDt); last = now;
-    if (state === 'play') {
-      if (rawDt > 0.03) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
-      if (slowFrames > 90 && DPR_CAP > 1) { DPR_CAP = Math.max(1, DPR_CAP - 0.5); slowFrames = 0; resize(); }
+    if (!document.hidden) {
+      // qualité adaptative : si la moyenne sur 45 images dépasse ~45 i/s, on baisse la résolution interne
+      if (rawDt < 0.25) { perfAcc += rawDt; perfN++; }
+      if (perfN >= 45) {
+        var avg = perfAcc / perfN; perfAcc = 0; perfN = 0;
+        if (avg > 0.022 && DPR > 0.75) { DPR_CAP = Math.max(0.75, DPR - 0.25); save.q = DPR_CAP; persist(); resize(); }
+      }
     }
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.clearRect(0, 0, W, H);

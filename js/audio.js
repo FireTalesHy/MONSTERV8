@@ -101,10 +101,10 @@
   // ---------------------------------------------------------------- moteur à boucles enregistrées
   // layers : boucles du ralenti au haut régime · rate : hauteur de lecture au ralenti / à la zone rouge · rpm : plage du compte-tours
   var SPROF = {
-    v8:     { layers: ['idle', 'mid', 'high'], rate: [0.82, 1.75], rpm: [1000, 6000], g: 0.62 },
-    vtec:   { layers: ['idle', 'mid', 'high'], rate: [1.2, 2.55], rpm: [1000, 8400], g: 0.55, vtec: 0.62 },
-    bike:   { layers: ['idle', 'mid', 'high'], rate: [1.55, 3.3], rpm: [1000, 9500], g: 0.5 },
-    diesel: { layers: ['hlow', 'hhigh'], rate: [0.78, 1.3], rpm: [700, 2600], g: 0.7 }
+    v8:     { layers: ['idle', 'mid', 'high'], rate: [0.82, 1.8], rpm: [900, 6500], g: 0.62 },
+    vtec:   { layers: ['idle', 'mid', 'high'], rate: [1.15, 3.0], rpm: [1000, 9600], g: 0.55, vtec: 0.56 },
+    bike:   { layers: ['idle', 'mid', 'high'], rate: [1.5, 3.5], rpm: [1400, 13800], g: 0.5 },
+    diesel: { layers: ['hlow', 'hhigh'], rate: [0.78, 1.32], rpm: [650, 2300], g: 0.7 }
   };
   var es = null;
   function samplesReady(P) { for (var i = 0; i < P.layers.length; i++) if (!buf[P.layers[i]]) return false; return true; }
@@ -131,8 +131,10 @@
   }
 
   // rpm : régime moteur ; throttle 0..1 ; boost bool ; prof : nom du profil
-  function engine(rpm, throttle, boost, prof) {
+  // cut : coupure du rupteur (le son s'étouffe une fraction de seconde)
+  function engine(rpm, throttle, boost, prof, cut) {
     if (!ac || !eng) return;
+    var cutK = cut ? 0.28 : 1, cutTc = cut ? 0.006 : 0.02;
     var SP = SPROF[prof] || SPROF.v8;
     if (samplesReady(SP)) {
       if (!es || es.prof !== prof) startSampleEngine(prof, SP);
@@ -147,7 +149,7 @@
         set(es.srcs[i].playbackRate, rate, 0.05);
       }
       set(es.lp.frequency, 700 + throttle * 4200 + k * 2800, 0.06);  // étouffé quand on lâche les gaz
-      set(es.out.gain, SP.g * (0.42 + 0.58 * throttle) * (boost ? 1.15 : 1), 0.06);
+      set(es.out.gain, SP.g * (0.42 + 0.58 * throttle) * (boost ? 1.15 : 1) * cutK, cut || throttle ? cutTc : 0.06);
       set(eng.out.gain, 0, 0.05);
       set(boostGain.gain, boost ? 0.12 : 0, 0.06);
       set(boostFilter.frequency, boost ? 1800 : 900, 0.1);
@@ -162,7 +164,7 @@
     var lpf = P.lp0 + throttle * P.lpt + rpm * P.lpr;
     if (P.vtec && rpm > P.vtec) lpf += 1600;
     set(eng.lp.frequency, lpf);
-    set(eng.out.gain, P.g + 0.28 * throttle);
+    set(eng.out.gain, (P.g + 0.28 * throttle) * cutK, cutTc);
     set(eng.lfo.frequency, P.lfoB + rpm / P.lfoR);
     set(eng.lfoG.gain, P.lfoD * (1 - 0.7 * throttle));
     set(boostGain.gain, boost ? 0.35 : 0, 0.06);
@@ -208,6 +210,10 @@
     setMuted: function (m) { muted = m; if (master) master.gain.value = m ? 0 : 0.5; },
     isMuted: function () { return muted; },
     loaded: function () { return Object.keys(buf).length + '/' + Object.keys(FILES).length; },
+    pop: function () {         // pétarade d'échappement (rupteur)
+      burst(0.05, rnd(900, 1600), 1.2, 0.22, 'bandpass', 300);
+      if (Math.random() < 0.5) setTimeout(function () { burst(0.04, rnd(700, 1300), 1.2, 0.16, 'bandpass', 250); }, 35);
+    },
     crush: function () {
       if (!play(['crush1', 'crush2', 'crush3'][Math.floor(Math.random() * 3)], 0.75, rnd(0.88, 1.1))) { burst(0.35, 1800, 1, 0.9, 'lowpass', 200); tone(110, 0.25, 0.5, 'sawtooth', 40); }
     },

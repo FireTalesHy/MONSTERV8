@@ -51,6 +51,30 @@
     }
   };
 
+  // ------------------------------------------------------------------ cache de sprites
+  // Les parties rigides (carrosserie, jantes, pneus) sont rendues une fois dans un canevas à la bonne échelle,
+  // puis recopiées à chaque image. Les halos lumineux (mode additif) sont rejoués en direct.
+  var CACHE = {}, NCACHE = 0, DEFER = null;
+  function bucket(gx) {
+    var m = gx.getTransform ? gx.getTransform() : null, sc = m ? Math.sqrt(m.a * m.a + m.b * m.b) : 2;
+    return Math.max(0.5, Math.min(5, Math.ceil(sc * 2.2) / 2));
+  }
+  function sprite(gx, key, x, y, w, h, fn) {
+    var b = bucket(gx), k = key + '@' + b, e = CACHE[k];
+    if (!e) {
+      if (NCACHE > 80) { CACHE = {}; NCACHE = 0; }
+      var c = document.createElement('canvas'); c.width = Math.ceil(w * b); c.height = Math.ceil(h * b);
+      var cx = c.getContext('2d'); cx.setTransform(b, 0, 0, b, -x * b, -y * b);
+      DEFER = [];
+      fn(cx);
+      e = CACHE[k] = { c: c, glows: DEFER }; DEFER = null; NCACHE++;
+    }
+    gx.drawImage(e.c, x, y, w, h);
+    for (var i = 0; i < e.glows.length; i++) glow.apply(null, [gx].concat(e.glows[i]));
+  }
+  // les polices changent le rendu du texte : on vide le cache une fois chargées
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { CACHE = {}; NCACHE = 0; });
+
   // ------------------------------------------------------------------ matériaux
   // peinture automobile : ciel reflété en haut, arête d'épaule brillante, ligne d'horizon sombre, sol reflété, occlusion en bas
   function carPaint(gx, path, c, y0, yb, y1, x0, x1) {
@@ -129,6 +153,7 @@
     gx.restore();
   }
   function glow(gx, x, y, r, rgb, a) {
+    if (DEFER) { DEFER.push([x, y, r, rgb, a]); return; }
     var gr = gx.createRadialGradient(x, y, 0, x, y, r);
     gr.addColorStop(0, 'rgba(' + rgb + ',' + a + ')'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
     var op = gx.globalCompositeOperation; gx.globalCompositeOperation = 'lighter';
@@ -155,8 +180,7 @@
   // ------------------------------------------------------------------ roue réaliste
   // o : rimR (rayon jante / rayon pneu), rim (couleur), spokes, style ('multi' | 'beadlock' | 'budd' | 'moto'),
   //     lugs (pavés de crampons), disc (disque de frein), caliper, ring (liseré LED), letters (inscriptions flanc)
-  function tire(gx, r, spin, o) {
-    o = o || {};
+  function tireBack(gx, r, spin, o) {
     var rr = r * (o.rimR || 0.6), i, a;
     // gomme : flanc bombé
     var tg = gx.createRadialGradient(0, 0, rr * 0.98, 0, 0, r);
@@ -200,10 +224,9 @@
       gx.fillStyle = '#3a3e45'; gx.beginPath(); gx.arc(0, 0, dr * 0.42, 0, TAU); gx.fill();
       gx.restore();
     }
-    if (o.caliper) {
-      var cg = gx.createLinearGradient(0, -rr, 0, -rr * 0.3); cg.addColorStop(0, mix(o.caliper, '#ffffff', 0.35)); cg.addColorStop(1, shade(o.caliper, 0.6));
-      gx.fillStyle = cg; gx.beginPath(); gx.arc(0, 0, rr * 0.84, -2.25, -1.45); gx.arc(0, 0, rr * 0.52, -1.45, -2.25, true); gx.closePath(); gx.fill();
-    }
+  }
+  function tireFront(gx, r, spin, o) {
+    var rr = r * (o.rimR || 0.6), i, a;
     var rim = o.rim || '#c8ced6', st = o.style || 'multi';
     gx.save(); gx.rotate(spin);
     if (st === 'beadlock' || st === 'budd') {
@@ -251,10 +274,26 @@
     var nl = st === 'budd' ? 10 : 5;
     for (i = 0; i < nl; i++) { a = i * TAU / nl; gx.beginPath(); gx.arc(Math.cos(a) * rr * (st === 'budd' ? 0.24 : 0.14), Math.sin(a) * rr * (st === 'budd' ? 0.24 : 0.14), Math.max(0.7, rr * 0.03), 0, TAU); gx.fill(); }
     gx.restore();
-    // lumière fixe (haut-gauche) sur l'ensemble
+  }
+  function tire(gx, r, spin, o) {
+    o = o || {};
+    var rr = r * (o.rimR || 0.6), R = r + 1;
+    var key = 'w' + r + '|' + rr + '|' + o.rim + '|' + o.spokes + '|' + o.style + '|' + o.lugs + '|' + o.disc + '|' + o.letters;
+    gx.save(); gx.rotate(spin);
+    sprite(gx, key + 'b', -R, -R, R * 2, R * 2, function (c) { tireBack(c, r, 0, o); });
+    gx.restore();
+    if (o.caliper) {
+      var cg = gx.createLinearGradient(0, -rr, 0, -rr * 0.3); cg.addColorStop(0, mix(o.caliper, '#ffffff', 0.35)); cg.addColorStop(1, shade(o.caliper, 0.6));
+      gx.fillStyle = cg; gx.beginPath(); gx.arc(0, 0, rr * 0.84, -2.25, -1.45); gx.arc(0, 0, rr * 0.52, -1.45, -2.25, true); gx.closePath(); gx.fill();
+    }
+    gx.save(); gx.rotate(spin);
+    sprite(gx, key + 'f', -R, -R, R * 2, R * 2, function (c) { tireFront(c, r, 0, o); });
+    gx.restore();
+    sprite(gx, 'L' + r, -R, -R, R * 2, R * 2, function (gx) {
     var L = gx.createLinearGradient(-r, -r, r, r);
     L.addColorStop(0, 'rgba(255,255,255,0.12)'); L.addColorStop(0.45, 'rgba(255,255,255,0)'); L.addColorStop(1, 'rgba(0,0,0,0.3)');
     gx.fillStyle = L; gx.beginPath(); gx.arc(0, 0, r, 0, TAU); gx.fill();
+    });
     if (o.ring) ledRing(gx, rr * 1.0, o.ring);
   }
   function ledRing(gx, rad, rgb) {
@@ -322,6 +361,7 @@
     }
     bar(gx, -WB, wy0, WB, wy1, 4, '#3a3e45');   // arbre de transmission
     if (boosting) flame(gx, -114, -12, -1, 36, 7);
+    sprite(gx, 'M' + c + col.b, -132, -80, 264, 86, function (gx) {
     // échappements latéraux sous la porte
     gx.fillStyle = chrome(gx, -10, -2); gx.fillRect(-36, -10, 70, 7);
     gx.fillStyle = 'rgba(0,0,0,0.35)'; for (i = 0; i < 9; i++) { gx.beginPath(); gx.arc(-30 + i * 7.5, -6.5, 1.3, 0, TAU); gx.fill(); }
@@ -372,6 +412,7 @@
     fillP(gx, 'M 106 -23 L 118 -23 Q 122 -22 122 -17 L 122 -12 Q 122 -9 118 -9 L 106 -9 Z', chrome(gx, -23, -9));
     fillP(gx, 'M -106 -21 L -115 -21 Q -119 -20 -119 -16 L -119 -12 Q -119 -9 -115 -9 L -106 -9 Z', chrome(gx, -21, -9));
     edge(gx, M_BODY);
+    });
     for (var w = 0; w < 2; w++) {
       gx.save(); gx.translate(w ? WB : -WB, w ? wy1 : wy0);
       tire(gx, WR, car.wheels[w].spin, { lugs: 18, rimR: 0.52, rim: '#d4d9e0', style: 'beadlock', disc: false });
@@ -394,6 +435,7 @@
     var RO = { rimR: 0.74, rim: '#26292f', spokes: 10, caliper: '#d11a2a', letters: false };
     for (i = 0; i < 2; i++) farWheel(gx, (i ? WB : -WB) - 5, (i ? wy1 : wy0) - 5, WR, car.wheels[i].spin, RO);
     if (boosting) { flame(gx, -110, 27, -1, 34, 4); }
+    sprite(gx, 'C' + c, -126, -50, 248, 90, function (gx) {
     // côté opposé (2.5D)
     gx.save(); gx.translate(-1.6, -1.6); gx.fillStyle = shade(c, 0.42); gx.fill(C_BODY); gx.restore();
     carPaint(gx, C_BODY, c, -44, -9, 32, -107, 113);
@@ -403,7 +445,7 @@
     gx.fillStyle = rg; gx.fillRect(-70, -46, 92, 7);
     // passages de roue sombres + élargisseurs
     for (i = 0; i < 2; i++) {
-      var ax = i ? WB : -WB, ay = i ? wy1 : wy0;
+      var ax = i ? WB : -WB, ay = 16;
       var ag = gx.createRadialGradient(ax, ay, WR, ax, ay, WR + 7); ag.addColorStop(0, '#020203'); ag.addColorStop(1, '#141518');
       gx.fillStyle = ag; gx.beginPath(); gx.arc(ax, ay, WR + 6, 0, TAU); gx.fill();
     }
@@ -462,6 +504,7 @@
     gx.fillStyle = '#fff'; gx.font = '800 italic 6px "Barlow Condensed", Arial, sans-serif'; gx.textAlign = 'center'; gx.textBaseline = 'middle'; gx.fillText('TYPE R', -29, 17.4);
     gx.fillStyle = 'rgba(255,255,255,0.8)'; gx.font = '700 italic 7px "Barlow Condensed", Arial, sans-serif'; gx.fillText('VTEC', 72, 10);
     edge(gx, C_BODY, 0.6);
+    });
     for (var w = 0; w < 2; w++) {
       gx.save(); gx.translate(w ? WB : -WB, w ? wy1 : wy0);
       tire(gx, WR, car.wheels[w].spin, { rimR: 0.74, rim: '#2b2e35', spokes: 10, caliper: '#d11a2a', ring: LED });
@@ -483,6 +526,8 @@
     gx.beginPath(); gx.moveTo(-12, -4); gx.lineTo(-WB, ry - 9); gx.moveTo(-12, 8); gx.lineTo(-WB, ry + 9); gx.stroke();
     fillP(gx, 'M -18 -9 L ' + (-WB) + ' ' + (ry - 4) + ' L ' + (-WB) + ' ' + (ry + 4) + ' L -16 5 Z', metal(gx, -10, 6, '#b9bfc8'));
     shock(gx, -22, -32, -28, -4, '#d4a017', 3.2);
+    sprite(gx, 'mA', -76, -52, 112, 72, function (gx) {
+      gx.lineCap = 'round'; gx.lineJoin = 'round';
     // moteur 4 cylindres
     var eg = gx.createLinearGradient(0, -34, 0, 10); eg.addColorStop(0, '#4a4f58'); eg.addColorStop(0.5, '#23262c'); eg.addColorStop(1, '#0f1013');
     fillP(gx, 'M -16 -28 L 20 -34 L 28 -8 L 14 8 L -14 6 Z', eg);
@@ -496,11 +541,13 @@
     fillP(gx, 'M -52 -14 L -59 -16 L -62 -8 L -56 -7 Z', carbon(gx, -16, -7));
     // cadre périmétrique alu
     fillP(gx, 'M 30 -48 L 38 -40 L -6 -6 L -20 -8 L -18 -16 Z', metal(gx, -48, -6, '#c3c9d2'));
+    });
     // fourche inversée : fourreaux dorés, tubes noirs, garde-boue
     gx.strokeStyle = '#d4a52a'; gx.lineWidth = 7; gx.beginPath(); gx.moveTo(36, -48); gx.lineTo(47, -16); gx.stroke();
     gx.strokeStyle = 'rgba(255,255,255,0.4)'; gx.lineWidth = 1.5; gx.beginPath(); gx.moveTo(34, -47); gx.lineTo(45, -17); gx.stroke();
     gx.strokeStyle = '#1d1f24'; gx.lineWidth = 4.5; gx.beginPath(); gx.moveTo(47, -16); gx.lineTo(WB, fy); gx.stroke();
     fillP(gx, 'M 40 ' + (fy - 22) + ' Q 56 ' + (fy - 34) + ' 72 ' + (fy - 22) + ' L 70 ' + (fy - 18) + ' Q 56 ' + (fy - 28) + ' 42 ' + (fy - 18) + ' Z', paintSolid(gx, c, fy - 34, fy - 18));
+    sprite(gx, 'mB' + c, -92, -102, 184, 118, function (gx) {
     // jambe du pilote (côté opposé, dans l'ombre)
     limb(gx, [[-22, -42], [12, -34], [-6, -6]], [13, 10, 8], '#0c0d10');
     // carénage, réservoir, coque arrière
@@ -541,6 +588,7 @@
     gx.save(); gx.clip(helm); gx.fillStyle = c; gx.fillRect(8, -88, 30, 3); gx.restore();
     var vg = gx.createLinearGradient(26, -92, 36, -80); vg.addColorStop(0, '#1a2a44'); vg.addColorStop(0.5, '#ff9a5a'); vg.addColorStop(1, '#141a26');
     fillP(gx, 'M 25 -91 Q 33 -91 36 -85 L 35 -80 L 26 -81 Z', vg);
+    });
     gx.lineCap = 'butt'; gx.lineJoin = 'miter';
   }
   function paintSolid(gx, c, y0, y1) { var g = gx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, mix(c, '#ffffff', 0.35)); g.addColorStop(1, shade(c, 0.6)); return g; }
@@ -569,6 +617,7 @@
     gx.fillStyle = metal(gx, 18, 30, '#2b2e34'); gx.fillRect(-212, 18, 392, 11);
     shock(gx, WB - 16, 16, WB - 4, fy - 4, '#3a3d44', 4); shock(gx, -WB + 14, 16, -WB + 2, ry - 4, '#3a3d44', 4);
     gx.fillStyle = '#1b1d21'; gx.fillRect(-WB - 60, ry - 6, 64, 8);                                     // balancier tandem
+    sprite(gx, 'T' + c, -232, -160, 430, 210, function (gx) {
     // caisse aluminium
     gx.save(); gx.translate(-3, -3); gx.fillStyle = '#7f8792'; gx.fillRect(-210, -112, 200, 100); gx.restore();
     var tg = gx.createLinearGradient(0, -112, 0, -12);
@@ -594,8 +643,6 @@
     for (i = 0; i < 4; i++) { lens(gx, 'M ' + (-205 + i * 62) + ' -110 h 5 v 3 h -5 Z', -110, -107, 'amber'); }
     lens(gx, 'M -210 -24 h 4 v 7 h -4 Z', -24, -17, 'tail'); glow(gx, -210, -20, 12, '255,40,40', 0.4);
     gx.fillStyle = '#16171b'; gx.fillRect(-212, -12, 6, 22); gx.fillRect(-216, 6, 14, 4);                // barre anti-encastrement
-    // garde-boue arrière
-    fillP(gx, 'M -228 ' + (ry - 2) + ' L -222 ' + (ry - 2) + ' L -222 ' + (ry + 30) + ' L -228 ' + (ry + 30) + ' Z', '#0f1013');
     // réservoir chromé + marchepieds
     gx.fillStyle = chrome(gx, 24, 44); gx.beginPath(); gx.moveTo(48, 24); gx.lineTo(84, 24); gx.quadraticCurveTo(88, 34, 84, 44); gx.lineTo(48, 44); gx.quadraticCurveTo(44, 34, 48, 24); gx.fill();
     gx.fillStyle = 'rgba(0,0,0,0.35)'; gx.fillRect(58, 24, 1.2, 20); gx.fillRect(74, 24, 1.2, 20);
@@ -638,6 +685,12 @@
     gx.fillStyle = 'rgba(0,0,0,0.3)'; for (i = 0; i < 9; i++) gx.fillRect(30, -100 + i * 6, 8, 1);   // grille de protection
     fillP(gx, 'M 30 -146 L 38 -146 L 42 -154 L 34 -154 Z', chromeV(gx, 30, 42));
     gx.fillStyle = '#0b0b0d'; gx.beginPath(); gx.ellipse(38, -154, 4, 1.4, 0, 0, TAU); gx.fill();
+    edge(gx, T_CAB, 0.6);
+    // garde-boue avant (aile chromée au-dessus de la roue)
+    gx.strokeStyle = chrome(gx, -10, 10); gx.lineWidth = 2; gx.beginPath(); gx.arc(WB, 36, 41, Math.PI * 1.12, Math.PI * 1.88); gx.stroke();
+    });
+    // garde-boue arrière
+    fillP(gx, 'M -228 ' + (ry - 2) + ' L -222 ' + (ry - 2) + ' L -222 ' + (ry + 30) + ' L -228 ' + (ry + 30) + ' Z', '#0f1013');
     if (boosting) {
       var op = gx.globalCompositeOperation; gx.globalCompositeOperation = 'lighter';
       var fl = 26 + Math.random() * 30, fx = 38, fyy = -154;
@@ -646,9 +699,6 @@
       gx.fillStyle = fg; gx.beginPath(); gx.moveTo(fx - 4, fyy); gx.lineTo(fx - fl * 0.7, fyy - fl * 1.6); gx.lineTo(fx + 4, fyy); gx.fill();
       gx.globalCompositeOperation = op;
     }
-    edge(gx, T_CAB, 0.6);
-    // garde-boue avant (aile chromée au-dessus de la roue)
-    gx.strokeStyle = chrome(gx, -10, 10); gx.lineWidth = 2; gx.beginPath(); gx.arc(WB, 36, 41, Math.PI * 1.12, Math.PI * 1.88); gx.stroke();
     var FO = { lugs: 0, rimR: 0.56, rim: '#dde1e7', style: 'budd', disc: false };
     gx.save(); gx.translate(WB, fy); tire(gx, WR, car.wheels[1].spin, FO);
     gx.fillStyle = chrome(gx, -6, 6); gx.beginPath(); gx.moveTo(-6, -6); gx.lineTo(6, -6); gx.lineTo(9, 0); gx.lineTo(6, 6); gx.lineTo(-6, 6); gx.fill();
